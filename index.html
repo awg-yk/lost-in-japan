@@ -1,0 +1,974 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>日本帰宅ゲーム / Lost in Japan (MVP)</title>
+
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+<style>
+  /* ============================================================
+     基本レイアウト
+     ============================================================ */
+  :root{
+    --panel-bg: rgba(17, 28, 43, 0.88);
+    --panel-border: rgba(255,255,255,0.08);
+    --accent-gold: #E8A33D;   /* 所持金 */
+    --accent-hunger: #E0574C; /* 空腹 */
+    --accent-thirst: #3CA9C7; /* 喉 */
+    --accent-indigo: #2B4C7E; /* 基調色 */
+    --text-main: #F3F1EA;
+    --text-sub: #A9B4C4;
+  }
+
+  html, body{
+    margin:0; padding:0; height:100%;
+    font-family: "Hiragino Sans", "Yu Gothic", "Noto Sans JP", sans-serif;
+    background:#0b1420;
+    color: var(--text-main);
+    overscroll-behavior:none;
+  }
+
+  #map{
+    position:absolute; inset:0;
+    width:100%; height:100dvh;
+  }
+
+  /* ============================================================
+     HUD (常時表示UI)
+     ============================================================ */
+  #hud{
+    position:absolute; top:0; left:0; right:0;
+    z-index:1000;
+    padding: env(safe-area-inset-top, 10px) 10px 8px 10px;
+    background: linear-gradient(to bottom, rgba(6,12,20,0.92), rgba(6,12,20,0.0) 100%);
+    pointer-events:none;
+  }
+  #hud-inner{
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 14px;
+    padding: 10px 12px;
+    display:flex;
+    flex-wrap:wrap;
+    gap: 8px 16px;
+    align-items:center;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+    pointer-events:auto;
+    backdrop-filter: blur(6px);
+  }
+  .hud-title{
+    font-weight:700; font-size:14px; letter-spacing:0.05em; color:var(--text-main);
+    white-space:nowrap;
+    margin-right:4px;
+  }
+  .hud-stat{
+    display:flex; flex-direction:column; gap:2px; min-width:74px;
+  }
+  .hud-stat .label{ font-size:10px; color:var(--text-sub); }
+  .hud-stat .value{ font-size:15px; font-weight:700; font-variant-numeric: tabular-nums; }
+
+  .gauge-wrap{ width:84px; }
+  .gauge-bg{
+    width:100%; height:8px; border-radius:5px;
+    background: rgba(255,255,255,0.12);
+    overflow:hidden;
+    margin-top:2px;
+  }
+  .gauge-fill{ height:100%; transition: width 0.3s ease; }
+  .gauge-fill.hunger{ background: var(--accent-hunger); }
+  .gauge-fill.thirst{ background: var(--accent-thirst); }
+
+  /* ============================================================
+     メッセージトースト
+     ============================================================ */
+  #toast{
+    position:absolute; left:50%; bottom:26px; transform:translateX(-50%);
+    z-index:1200;
+    background: rgba(17,28,43,0.95);
+    border:1px solid var(--panel-border);
+    color:var(--text-main);
+    padding:10px 18px; border-radius:10px;
+    font-size:13px; max-width:86%; text-align:center;
+    box-shadow:0 6px 18px rgba(0,0,0,0.4);
+    opacity:0; pointer-events:none;
+    transition: opacity 0.25s ease;
+  }
+  #toast.show{ opacity:1; }
+
+  /* ============================================================
+     オーバーレイ（自宅登録・結果画面）
+     ============================================================ */
+  .overlay{
+    position:absolute; inset:0; z-index:1500;
+    background: rgba(6,10,16,0.72);
+    display:flex; align-items:flex-end; justify-content:center;
+    padding-bottom: env(safe-area-inset-bottom, 16px);
+  }
+  .overlay.hidden{ display:none; }
+  .sheet{
+    background: var(--panel-bg);
+    border:1px solid var(--panel-border);
+    border-radius: 18px 18px 0 0;
+    width:100%; max-width:480px;
+    padding:20px 20px calc(20px + env(safe-area-inset-bottom,0px)) 20px;
+    box-shadow: 0 -8px 30px rgba(0,0,0,0.5);
+  }
+  .sheet h2{ margin:0 0 8px 0; font-size:18px; }
+  .sheet p{ margin:4px 0; font-size:13px; color:var(--text-sub); line-height:1.6; }
+  .sheet .result-grid{
+    display:grid; grid-template-columns: 1fr 1fr; gap:8px 14px; margin:14px 0;
+  }
+  .sheet .result-grid div{ font-size:13px; }
+  .sheet .result-grid .k{ color:var(--text-sub); }
+  .sheet .result-grid .v{ font-weight:700; }
+
+  button.primary{
+    width:100%; padding:14px; border:none; border-radius:12px;
+    background: var(--accent-indigo); color:#fff; font-size:15px; font-weight:700;
+    margin-top:10px; -webkit-tap-highlight-color:transparent;
+  }
+  button.primary:active{ opacity:0.85; }
+  button.secondary{
+    width:100%; padding:12px; border:1px solid var(--panel-border); border-radius:12px;
+    background:transparent; color:var(--text-sub); font-size:13px; margin-top:8px;
+  }
+
+  /* ============================================================
+     右下フローティングボタン（リセット等）
+     ============================================================ */
+  #fab-reset{
+    position:absolute; right:12px; bottom: calc(16px + env(safe-area-inset-bottom,0px));
+    z-index:1000;
+    background: rgba(17,28,43,0.9);
+    border:1px solid var(--panel-border);
+    color:var(--text-sub);
+    font-size:11px;
+    padding:8px 12px; border-radius:20px;
+  }
+
+  #loading{
+    position:absolute; inset:0; z-index:2000;
+    background:#0b1420; color:var(--text-sub);
+    display:flex; align-items:center; justify-content:center;
+    font-size:14px; text-align:center; padding:24px;
+  }
+  #loading.hidden{ display:none; }
+</style>
+</head>
+<body>
+
+<div id="map"></div>
+
+<!-- 常時表示HUD -->
+<div id="hud">
+  <div id="hud-inner">
+    <div class="hud-title">帰宅ゲーム</div>
+
+    <div class="hud-stat">
+      <span class="label">自宅まで(直線)</span>
+      <span class="value" id="stat-distance">-- km</span>
+    </div>
+
+    <div class="hud-stat">
+      <span class="label">所持金</span>
+      <span class="value" id="stat-money">¥0</span>
+    </div>
+
+    <div class="hud-stat">
+      <span class="label">プレイ時間</span>
+      <span class="value" id="stat-time">00:00</span>
+    </div>
+
+    <div class="hud-stat">
+      <span class="label">空腹</span>
+      <div class="gauge-wrap">
+        <div class="gauge-bg"><div class="gauge-fill hunger" id="gauge-hunger" style="width:100%"></div></div>
+      </div>
+    </div>
+
+    <div class="hud-stat">
+      <span class="label">喉</span>
+      <div class="gauge-wrap">
+        <div class="gauge-bg"><div class="gauge-fill thirst" id="gauge-thirst" style="width:100%"></div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="toast"></div>
+<button id="fab-reset">最初からやり直す</button>
+
+<!-- 自宅登録シート -->
+<div id="overlay-home" class="overlay hidden">
+  <div class="sheet">
+    <h2>自宅を登録しよう</h2>
+    <p>地図をタップ（クリック）して、あなたの「自宅」の場所を登録してください。<br>
+    登録後、日本のどこかからスタートして、そこを目指して帰ります。</p>
+  </div>
+</div>
+
+<!-- ゴール結果シート -->
+<div id="overlay-result" class="overlay hidden">
+  <div class="sheet">
+    <h2>おかえりなさい！🏠</h2>
+    <p>自宅に到着しました。今回の旅の記録です。</p>
+    <div class="result-grid">
+      <div class="k">プレイ時間</div><div class="v" id="res-time">--</div>
+      <div class="k">総歩行距離</div><div class="v" id="res-walk">--</div>
+    </div>
+    <button class="primary" id="btn-play-again">もう一度、別の場所から出発する</button>
+  </div>
+</div>
+
+<!-- 施設シート -->
+<div id="overlay-facility" class="overlay hidden">
+  <div class="sheet">
+    <h2 id="fac-title">施設</h2>
+    <p id="fac-desc"></p>
+    <button class="primary" id="fac-btn-recover">回復する</button>
+    <button class="primary" id="fac-btn-work">アルバイトする</button>
+    <button class="secondary" id="fac-btn-close">閉じる</button>
+  </div>
+</div>
+
+<div id="loading">出発地点を探しています...</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+/* ==================================================================
+   日本帰宅ゲーム (Lost in Japan) - MVP
+   --------------------------------------------------------------
+   このファイルはMVP（最小限で遊べるバージョン）です。
+   実装済み:
+     - 自宅登録（初回のみ地図クリックで設定）
+     - 日本各地（離島含む候補地）からランダムに徒歩到達可能な道路上へスタート
+     - Overpass API から現在地周辺の道路網を動的に取得し、
+       実際の道路（グラフ）に沿ってのみ移動できる
+     - 空腹・喉ゲージ（歩いた距離に応じて減少、0でペナルティ）
+     - 所持金・プレイ時間・自宅までの直線距離のHUD表示
+     - LocalStorage によるセーブ/ロード
+     - 自宅到達でリザルト表示
+
+   未実装（今後のフェーズで追加予定・設計はモジュール化して拡張しやすくしてある）:
+     - 電車・新幹線・飛行機・フェリー・ヒッチハイクなどの交通手段
+     - コンビニ・駅などの施設でのアルバイト
+     - 道に落ちているお金
+     - 施設での飲食による空腹/喉の回復
+     - 詳細なリザルト項目（訪問施設数、交通機関の内訳等）
+   ================================================================== */
+
+  /* ---------------------------------------------------------------
+     0. 定数
+     --------------------------------------------------------------- */
+  const SAVE_KEY = 'lostInJapan_save_v1';
+
+  // 徒歩速度: 現実の平均歩行速度 約4.5km/h を60倍速に
+  const REAL_WALK_KMH = 4.5;
+  const BASE_SPEED_MPS = (REAL_WALK_KMH * 1000 / 3600) * 60; // m/s (ゲーム内)
+
+  // 空腹・喉は「歩いた距離」に応じて減少する（停止中は減らない）
+  const HUNGER_DECAY_PER_METER = 1 / 100; // 100mごとに1減る
+  const THIRST_DECAY_PER_METER = 1 / 80;  // 80mごとに1減る
+  const LOW_STAT_SPEED_PENALTY = 0.5;     // 0になった時の速度倍率
+
+  // 1回のクリックで移動を要求できる最大直線距離（km）
+  // これを超える場合は「近くの道を目指しましょう」と案内し、
+  // 一度に日本全国のデータを読み込まない設計にする。
+  const MAX_CLICK_DISTANCE_KM = 15;
+
+  // 自宅到達とみなす距離
+  const ARRIVAL_THRESHOLD_M = 60;
+
+  // Overpassで取得する道路の種別（歩行可能なものに限定）
+  const HIGHWAY_FILTER =
+    '^(trunk|primary|secondary|tertiary|unclassified|residential|service|living_street|pedestrian|track|footway|path|steps|cycleway)$';
+
+  // 施設の種別定義。match() はOverpassのtagsオブジェクトを見て種別を判定する。
+  // canRecover: 飲食による空腹/喉の回復ができるか / canWork: アルバイトができるか
+  const FACILITY_TYPES = {
+    convenience: { name:'コンビニ', icon:'🏪', match: t => t.shop==='convenience',
+      canRecover:true, canWork:true, recoverCost:200, hungerGain:40, thirstGain:20, wage:800 },
+    supermarket: { name:'スーパー', icon:'🛒', match: t => t.shop==='supermarket',
+      canRecover:true, canWork:false, recoverCost:300, hungerGain:60, thirstGain:15, wage:0 },
+    vending:     { name:'自動販売機', icon:'🥤', match: t => t.amenity==='vending_machine',
+      canRecover:true, canWork:false, recoverCost:150, hungerGain:0, thirstGain:35, wage:0 },
+    school:      { name:'学校', icon:'🏫', match: t => t.amenity==='school',
+      canRecover:false, canWork:true, wage:700 },
+    library:     { name:'図書館', icon:'📚', match: t => t.amenity==='library',
+      canRecover:false, canWork:true, wage:600 },
+    hospital:    { name:'病院', icon:'🏥', match: t => t.amenity==='hospital',
+      canRecover:false, canWork:true, wage:1000 },
+    shrine:      { name:'神社', icon:'⛩️', match: t => t.amenity==='place_of_worship',
+      canRecover:false, canWork:true, wage:500 },
+    townhall:    { name:'市役所', icon:'🏛️', match: t => t.amenity==='townhall',
+      canRecover:false, canWork:true, wage:900 },
+    park:        { name:'公園', icon:'🌳', match: t => t.leisure==='park',
+      canRecover:false, canWork:true, wage:400 },
+    station:     { name:'駅', icon:'🚉', match: t => t.railway==='station',
+      canRecover:false, canWork:false, wage:0 },
+  };
+  // Overpassクエリに使うタグ条件（施設ノードを一括取得する）
+  const FACILITY_OVERPASS_TAGS = [
+    '["shop"="convenience"]', '["shop"="supermarket"]', '["amenity"="vending_machine"]',
+    '["amenity"="school"]', '["amenity"="library"]', '["amenity"="hospital"]',
+    '["amenity"="place_of_worship"]', '["amenity"="townhall"]', '["leisure"="park"]',
+    '["railway"="station"]',
+  ];
+  // 施設に「近づいた」とみなす距離
+  const FACILITY_INTERACT_RADIUS_M = 80;
+
+  // 出発地点の候補（離島含む、全国に分散）。ここから道路が見つかる地点をランダム選定する。
+  const START_CANDIDATES = [
+    ['稚内', 45.4159, 141.6733], ['札幌', 43.0618, 141.3545], ['函館', 41.7687, 140.7288],
+    ['青森', 40.8244, 140.7400], ['盛岡', 39.7036, 141.1527], ['仙台', 38.2682, 140.8694],
+    ['秋田', 39.7186, 140.1024], ['山形', 38.2404, 140.3633], ['福島', 37.7500, 140.4678],
+    ['新潟', 37.9161, 139.0364], ['金沢', 36.5613, 136.6562], ['富山', 36.6953, 137.2113],
+    ['福井', 36.0652, 136.2216], ['長野', 36.6513, 138.1810], ['甲府', 35.6642, 138.5685],
+    ['静岡', 34.9769, 138.3831], ['名古屋', 35.1815, 136.9066], ['岐阜', 35.3912, 136.7223],
+    ['津', 34.7185, 136.5086], ['大阪', 34.6937, 135.5023], ['京都', 35.0116, 135.7681],
+    ['神戸', 34.6901, 135.1955], ['奈良', 34.6851, 135.8048], ['和歌山', 34.2260, 135.1675],
+    ['鳥取', 35.5011, 134.2351], ['松江', 35.4723, 133.0505], ['岡山', 34.6551, 133.9195],
+    ['広島', 34.3853, 132.4553], ['山口', 34.1785, 131.4737], ['徳島', 34.0658, 134.5593],
+    ['高松', 34.3401, 134.0434], ['松山', 33.8392, 132.7657], ['高知', 33.5597, 133.5311],
+    ['福岡', 33.5904, 130.4017], ['佐賀', 33.2494, 130.2988], ['長崎', 32.7503, 129.8779],
+    ['熊本', 32.7898, 130.7417], ['大分', 33.2382, 131.6126], ['宮崎', 31.9111, 131.4239],
+    ['鹿児島', 31.5602, 130.5581], ['那覇', 26.2124, 127.6809], ['石垣島', 24.3448, 124.1572],
+    ['佐渡島', 38.0186, 138.3690], ['種子島', 30.7300, 130.9700], ['対馬', 34.2000, 129.2900],
+  ];
+
+  /* ---------------------------------------------------------------
+     1. ゲーム状態
+     --------------------------------------------------------------- */
+  const state = {
+    home: null,           // {lat, lon}
+    player: null,         // {lat, lon}
+    money: 1000,
+    hunger: 100,
+    thirst: 100,
+    playtimeSec: 0,
+    totalWalkMeters: 0,
+    workedFacilityIds: [], // アルバイト済み施設のOSM ID一覧（重複アルバイト防止）
+    isMoving: false,
+    hasHome: false,
+    hasStarted: false,
+  };
+
+  /* ---------------------------------------------------------------
+     2. 汎用ユーティリティ
+     --------------------------------------------------------------- */
+  function haversineMeters(lat1, lon1, lat2, lon2){
+    const R = 6371000;
+    const toRad = d => d * Math.PI / 180;
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat/2)**2 +
+              Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon/2)**2;
+    return 2 * R * Math.asin(Math.sqrt(a));
+  }
+
+  function fmtKm(meters){
+    return (meters/1000).toFixed(meters < 10000 ? 2 : 1) + ' km';
+  }
+
+  function fmtTime(sec){
+    const h = Math.floor(sec/3600);
+    const m = Math.floor((sec%3600)/60);
+    const s = Math.floor(sec%60);
+    if(h > 0) return `${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+  }
+
+  let toastTimer = null;
+  function showToast(msg, ms=2400){
+    const el = document.getElementById('toast');
+    el.textContent = msg;
+    el.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(()=> el.classList.remove('show'), ms);
+  }
+
+  function setLoading(visible, text){
+    const el = document.getElementById('loading');
+    if(text) el.textContent = text;
+    el.classList.toggle('hidden', !visible);
+  }
+
+  /* ---------------------------------------------------------------
+     3. 地図
+     --------------------------------------------------------------- */
+  const map = L.map('map', { zoomControl: true, attributionControl: true })
+    .setView([36.5, 138.0], 5);
+
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+    maxZoom: 19,
+    attribution: '&copy; OpenStreetMap contributors'
+  }).addTo(map);
+
+  const roadLayer = L.layerGroup().addTo(map);     // 取得した道路網の可視化
+  const facilityLayer = L.layerGroup().addTo(map); // 取得した施設アイコンの表示
+  let homeMarker = null;
+  let playerMarker = null;
+  let currentFacility = null; // 現在シートを開いている施設
+
+  const homeIcon = L.divIcon({
+    className:'', html:'<div style="font-size:26px;line-height:26px;">🏠</div>',
+    iconSize:[26,26], iconAnchor:[13,26]
+  });
+  const playerIcon = L.divIcon({
+    className:'', html:'<div style="font-size:24px;line-height:24px;">🚶</div>',
+    iconSize:[24,24], iconAnchor:[12,20]
+  });
+  function buildFacilityIcon(emoji){
+    return L.divIcon({
+      className:'', html:`<div style="font-size:20px;line-height:20px;">${emoji}</div>`,
+      iconSize:[20,20], iconAnchor:[10,18]
+    });
+  }
+
+  /* ---------------------------------------------------------------
+     4. 道路グラフ（Overpass APIから動的取得）
+     --------------------------------------------------------------- */
+  const roadGraph = {
+    nodes: new Map(),  // id -> {lat, lon}
+    adj: new Map(),    // id -> [{to, dist}]
+    bbox: null,        // 現在読み込み済みの範囲 {s,w,n,e}
+  };
+  const facilities = new Map(); // id -> {id, lat, lon, kind, name}
+
+  function classifyFacility(tags){
+    for(const [kind, cfg] of Object.entries(FACILITY_TYPES)){
+      if(cfg.match(tags)) return kind;
+    }
+    return null;
+  }
+
+  async function overpassFetch(query){
+    const res = await fetch('https://overpass-api.de/api/interpreter', {
+      method: 'POST',
+      body: query
+    });
+    if(!res.ok) throw new Error('Overpass API error: ' + res.status);
+    return res.json();
+  }
+
+  function bboxQuery(s,w,n,e){
+    const facilityClauses = FACILITY_OVERPASS_TAGS
+      .map(tag => `node${tag}(${s},${w},${n},${e});`).join('');
+    return `[out:json][timeout:25];(way["highway"~"${HIGHWAY_FILTER}"](${s},${w},${n},${e});${facilityClauses});out body;>;out skel qt;`;
+  }
+
+  // 与えられたOverpassレスポンスからグラフを構築（既存グラフを置き換える）
+  function buildGraphFromElements(elements){
+    roadGraph.nodes = new Map();
+    roadGraph.adj = new Map();
+    roadLayer.clearLayers();
+    facilityLayer.clearLayers();
+    facilities.clear();
+
+    for(const el of elements){
+      if(el.type === 'node'){
+        roadGraph.nodes.set(el.id, { lat: el.lat, lon: el.lon });
+
+        // タグを持つノードは施設候補として判定する
+        if(el.tags){
+          const kind = classifyFacility(el.tags);
+          if(kind){
+            const cfg = FACILITY_TYPES[kind];
+            const facility = { id: el.id, lat: el.lat, lon: el.lon, kind, name: el.tags.name || cfg.name };
+            facilities.set(el.id, facility);
+            const marker = L.marker([el.lat, el.lon], { icon: buildFacilityIcon(cfg.icon) }).addTo(facilityLayer);
+            marker.on('click', () => openFacilitySheet(facility));
+          }
+        }
+      }
+    }
+    for(const el of elements){
+      if(el.type === 'way' && Array.isArray(el.nodes)){
+        const latlngs = [];
+        for(let i=0; i<el.nodes.length; i++){
+          const n = roadGraph.nodes.get(el.nodes[i]);
+          if(n) latlngs.push([n.lat, n.lon]);
+        }
+        if(latlngs.length > 1){
+          L.polyline(latlngs, { color:'#E8A33D', weight:2, opacity:0.55 }).addTo(roadLayer);
+        }
+        for(let i=0; i<el.nodes.length-1; i++){
+          const a = el.nodes[i], b = el.nodes[i+1];
+          const na = roadGraph.nodes.get(a), nb = roadGraph.nodes.get(b);
+          if(!na || !nb) continue;
+          const d = haversineMeters(na.lat, na.lon, nb.lat, nb.lon);
+          if(!roadGraph.adj.has(a)) roadGraph.adj.set(a, []);
+          if(!roadGraph.adj.has(b)) roadGraph.adj.set(b, []);
+          roadGraph.adj.get(a).push({ to:b, dist:d });
+          roadGraph.adj.get(b).push({ to:a, dist:d });
+        }
+      }
+    }
+  }
+
+  // 指定した中心・半径(km)の範囲の道路網を取得してグラフを構築する
+  async function loadRoadsAround(lat, lon, radiusKm){
+    const dLat = radiusKm / 111;
+    const dLon = radiusKm / (111 * Math.cos(lat * Math.PI/180));
+    const s = lat - dLat, n = lat + dLat, w = lon - dLon, e = lon + dLon;
+    const data = await overpassFetch(bboxQuery(s,w,n,e));
+    buildGraphFromElements(data.elements || []);
+    roadGraph.bbox = { s, w, n, e };
+    return roadGraph.nodes.size > 0;
+  }
+
+  // 現在のグラフの範囲に、指定座標が十分に収まっているか
+  function isCoveredByCurrentGraph(lat, lon){
+    if(!roadGraph.bbox) return false;
+    const b = roadGraph.bbox;
+    const margin = 0.005; // 端ギリギリは再取得させる
+    return lat > b.s+margin && lat < b.n-margin && lon > b.w+margin && lon < b.e-margin;
+  }
+
+  function findNearestNode(lat, lon){
+    let bestId = null, bestDist = Infinity;
+    for(const [id, n] of roadGraph.nodes){
+      const d = haversineMeters(lat, lon, n.lat, n.lon);
+      if(d < bestDist){ bestDist = d; bestId = id; }
+    }
+    return bestId === null ? null : { id: bestId, dist: bestDist };
+  }
+
+  // 単純な配列ベースのダイクストラ法（グラフが数千ノード程度なので十分）
+  function dijkstra(startId, endId){
+    const dist = new Map([[startId, 0]]);
+    const prev = new Map();
+    const visited = new Set();
+    const queue = new Set([startId]);
+
+    while(queue.size > 0){
+      let currentId = null, currentDist = Infinity;
+      for(const id of queue){
+        const d = dist.get(id);
+        if(d < currentDist){ currentDist = d; currentId = id; }
+      }
+      if(currentId === null) break;
+      queue.delete(currentId);
+      if(currentId === endId) break;
+      visited.add(currentId);
+
+      const neighbors = roadGraph.adj.get(currentId) || [];
+      for(const { to, dist: edgeDist } of neighbors){
+        if(visited.has(to)) continue;
+        const nd = currentDist + edgeDist;
+        if(nd < (dist.has(to) ? dist.get(to) : Infinity)){
+          dist.set(to, nd);
+          prev.set(to, currentId);
+          queue.add(to);
+        }
+      }
+    }
+
+    if(!dist.has(endId)) return null;
+    const path = [endId];
+    let cur = endId;
+    while(cur !== startId){
+      cur = prev.get(cur);
+      if(cur === undefined) return null;
+      path.push(cur);
+    }
+    path.reverse();
+    return path.map(id => roadGraph.nodes.get(id));
+  }
+
+  /* ---------------------------------------------------------------
+     5. 出発地点の決定
+     --------------------------------------------------------------- */
+  async function chooseStartLocation(){
+    setLoading(true, '出発地点を探しています...');
+    const candidates = [...START_CANDIDATES].sort(() => Math.random() - 0.5);
+
+    for(const [name, lat, lon] of candidates){
+      try{
+        // 候補地の少し周辺(1.5km)に道があるか確認
+        const dLat = 1.5/111, dLon = 1.5/(111*Math.cos(lat*Math.PI/180));
+        const data = await overpassFetch(bboxQuery(lat-dLat, lon-dLon, lat+dLat, lon+dLon));
+        const nodes = (data.elements || []).filter(el => el.type === 'node');
+        if(nodes.length === 0) continue;
+
+        // ランダムなノードを開始点に採用
+        const pick = nodes[Math.floor(Math.random() * nodes.length)];
+        state.player = { lat: pick.lat, lon: pick.lon };
+        showToast(`「${name}」付近からスタートします`);
+        setLoading(false);
+        return true;
+      }catch(err){
+        console.warn('候補地の取得に失敗:', name, err);
+      }
+    }
+    setLoading(false);
+    showToast('出発地点の取得に失敗しました。通信環境をご確認の上、リロードしてください。', 4000);
+    return false;
+  }
+
+  /* ---------------------------------------------------------------
+     6. 移動処理
+     --------------------------------------------------------------- */
+  async function handleMapClick(latlng){
+    if(!state.hasStarted || state.isMoving) return;
+
+    const clickDistKm = haversineMeters(state.player.lat, state.player.lon, latlng.lat, latlng.lng) / 1000;
+    if(clickDistKm > MAX_CLICK_DISTANCE_KM){
+      showToast(`一度にそんなに遠くへは行けません。${MAX_CLICK_DISTANCE_KM}km以内の場所を目指しましょう`);
+      return;
+    }
+
+    // 現在のグラフでプレイヤー地点・目的地の両方がカバーされていなければ再取得
+    const needsReload = !isCoveredByCurrentGraph(state.player.lat, state.player.lon) ||
+                         !isCoveredByCurrentGraph(latlng.lat, latlng.lng) ||
+                         roadGraph.nodes.size === 0;
+    if(needsReload){
+      setLoading(true, '周辺の道路データを取得しています...');
+      const midLat = (state.player.lat + latlng.lat)/2;
+      const midLon = (state.player.lon + latlng.lng)/2;
+      const spanKm = Math.max(clickDistKm/2 + 2, 3);
+      const ok = await loadRoadsAround(midLat, midLon, spanKm);
+      setLoading(false);
+      if(!ok){
+        showToast('この付近の道路データが取得できませんでした');
+        return;
+      }
+      drawHomeAndPlayerMarkers();
+    }
+
+    const startNode = findNearestNode(state.player.lat, state.player.lon);
+    const endNode = findNearestNode(latlng.lat, latlng.lng);
+    if(!startNode || startNode.dist > 300){
+      showToast('現在地の近くに道路が見つかりません');
+      return;
+    }
+    if(!endNode || endNode.dist > 300){
+      showToast('その場所の近くに道路が見つかりません。道路上（線が引かれた場所）をタップしてください');
+      return;
+    }
+
+    const path = dijkstra(startNode.id, endNode.id);
+    if(!path){
+      showToast('道がつながっていないため、そこへは歩いて行けません');
+      return;
+    }
+
+    animateAlongPath(path);
+  }
+
+  function animateAlongPath(latlngPath){
+    if(latlngPath.length < 2) return;
+    state.isMoving = true;
+
+    // 区間ごとの距離と累積距離を事前計算
+    const segDist = [];
+    let total = 0;
+    for(let i=0; i<latlngPath.length-1; i++){
+      const d = haversineMeters(latlngPath[i].lat, latlngPath[i].lon, latlngPath[i+1].lat, latlngPath[i+1].lon);
+      segDist.push(d);
+      total += d;
+    }
+
+    const penalty = (state.hunger <= 0 || state.thirst <= 0) ? LOW_STAT_SPEED_PENALTY : 1;
+    const speedMps = BASE_SPEED_MPS * penalty;
+    const durationMs = (total / speedMps) * 1000;
+
+    const startTime = performance.now();
+    let lastCumDist = 0;
+
+    function step(now){
+      const elapsed = now - startTime;
+      const frac = Math.min(1, elapsed / durationMs);
+      const targetCumDist = frac * total;
+
+      // targetCumDistがどの区間にあるか探す
+      let acc = 0, segIndex = 0;
+      for(; segIndex < segDist.length; segIndex++){
+        if(acc + segDist[segIndex] >= targetCumDist) break;
+        acc += segDist[segIndex];
+      }
+      segIndex = Math.min(segIndex, segDist.length-1);
+      const segFrac = segDist[segIndex] > 0 ? (targetCumDist - acc) / segDist[segIndex] : 1;
+      const a = latlngPath[segIndex], b = latlngPath[segIndex+1] || a;
+      const curLat = a.lat + (b.lat - a.lat) * segFrac;
+      const curLon = a.lon + (b.lon - a.lon) * segFrac;
+
+      state.player = { lat: curLat, lon: curLon };
+      playerMarker.setLatLng([curLat, curLon]);
+
+      // 今回のフレームで進んだ距離ぶんだけ空腹・喉を減らす
+      const deltaDist = targetCumDist - lastCumDist;
+      lastCumDist = targetCumDist;
+      state.totalWalkMeters += deltaDist;
+      state.hunger = Math.max(0, state.hunger - deltaDist * HUNGER_DECAY_PER_METER);
+      state.thirst = Math.max(0, state.thirst - deltaDist * THIRST_DECAY_PER_METER);
+
+      updateHud();
+
+      if(frac < 1){
+        requestAnimationFrame(step);
+      }else{
+        state.isMoving = false;
+        checkArrival();
+        saveGame();
+      }
+    }
+    requestAnimationFrame(step);
+  }
+
+  function checkArrival(){
+    const d = haversineMeters(state.player.lat, state.player.lon, state.home.lat, state.home.lon);
+    if(d <= ARRIVAL_THRESHOLD_M){
+      showResult();
+    }
+  }
+
+  /* ---------------------------------------------------------------
+     6b. 施設（回復・アルバイト）
+     --------------------------------------------------------------- */
+  function openFacilitySheet(facility){
+    if(!state.hasStarted || state.isMoving) return;
+
+    const distance = haversineMeters(state.player.lat, state.player.lon, facility.lat, facility.lon);
+    if(distance > FACILITY_INTERACT_RADIUS_M){
+      showToast(`施設に近づいてから利用してください（あと約${Math.round(distance - FACILITY_INTERACT_RADIUS_M)}m）`);
+      return;
+    }
+
+    currentFacility = facility;
+    const cfg = FACILITY_TYPES[facility.kind];
+    document.getElementById('fac-title').textContent = `${cfg.icon} ${facility.name}`;
+
+    const btnRecover = document.getElementById('fac-btn-recover');
+    const btnWork = document.getElementById('fac-btn-work');
+    const already = state.workedFacilityIds.includes(facility.id);
+
+    if(cfg.canRecover){
+      btnRecover.style.display = 'block';
+      btnRecover.textContent = `¥${cfg.recoverCost} で飲食する（空腹+${cfg.hungerGain} / 喉+${cfg.thirstGain}）`;
+    }else{
+      btnRecover.style.display = 'none';
+    }
+
+    if(cfg.canWork){
+      btnWork.style.display = 'block';
+      btnWork.disabled = already;
+      btnWork.textContent = already ? 'この施設では既に働きました' : `アルバイトする（¥${cfg.wage} 稼ぐ）`;
+    }else{
+      btnWork.style.display = 'none';
+    }
+
+    document.getElementById('fac-desc').textContent =
+      (!cfg.canRecover && !cfg.canWork) ? 'ここでは特に何もできません（今後の機能で利用可能になるかもしれません）' : '';
+
+    document.getElementById('overlay-facility').classList.remove('hidden');
+  }
+
+  function closeFacilitySheet(){
+    document.getElementById('overlay-facility').classList.add('hidden');
+    currentFacility = null;
+  }
+
+  document.getElementById('fac-btn-close').addEventListener('click', closeFacilitySheet);
+
+  document.getElementById('fac-btn-recover').addEventListener('click', () => {
+    if(!currentFacility) return;
+    const cfg = FACILITY_TYPES[currentFacility.kind];
+    if(state.money < cfg.recoverCost){
+      showToast('所持金が足りません');
+      return;
+    }
+    state.money -= cfg.recoverCost;
+    state.hunger = Math.min(100, state.hunger + cfg.hungerGain);
+    state.thirst = Math.min(100, state.thirst + cfg.thirstGain);
+    showToast(`${currentFacility.name}で飲食しました`);
+    updateHud();
+    saveGame();
+    closeFacilitySheet();
+  });
+
+  document.getElementById('fac-btn-work').addEventListener('click', () => {
+    if(!currentFacility) return;
+    const cfg = FACILITY_TYPES[currentFacility.kind];
+    if(state.workedFacilityIds.includes(currentFacility.id)){
+      showToast('この施設では既にアルバイト済みです');
+      return;
+    }
+    state.money += cfg.wage;
+    state.workedFacilityIds.push(currentFacility.id);
+    showToast(`アルバイトして ¥${cfg.wage} 稼ぎました`);
+    updateHud();
+    saveGame();
+    closeFacilitySheet();
+  });
+
+  /* ---------------------------------------------------------------
+     7. HUD更新
+     --------------------------------------------------------------- */
+  function updateHud(){
+    if(state.home && state.player){
+      const d = haversineMeters(state.player.lat, state.player.lon, state.home.lat, state.home.lon);
+      document.getElementById('stat-distance').textContent = fmtKm(d);
+    }
+    document.getElementById('stat-money').textContent = '¥' + Math.floor(state.money).toLocaleString();
+    document.getElementById('stat-time').textContent = fmtTime(state.playtimeSec);
+    document.getElementById('gauge-hunger').style.width = state.hunger + '%';
+    document.getElementById('gauge-thirst').style.width = state.thirst + '%';
+  }
+
+  function drawHomeAndPlayerMarkers(){
+    if(state.home){
+      if(homeMarker) homeMarker.setLatLng([state.home.lat, state.home.lon]);
+      else homeMarker = L.marker([state.home.lat, state.home.lon], { icon: homeIcon }).addTo(map);
+    }
+    if(state.player){
+      if(playerMarker) playerMarker.setLatLng([state.player.lat, state.player.lon]);
+      else playerMarker = L.marker([state.player.lat, state.player.lon], { icon: playerIcon }).addTo(map);
+    }
+  }
+
+  /* ---------------------------------------------------------------
+     8. リザルト
+     --------------------------------------------------------------- */
+  function showResult(){
+    document.getElementById('res-time').textContent = fmtTime(state.playtimeSec);
+    document.getElementById('res-walk').textContent = fmtKm(state.totalWalkMeters);
+    document.getElementById('overlay-result').classList.remove('hidden');
+  }
+
+  document.getElementById('btn-play-again').addEventListener('click', async () => {
+    document.getElementById('overlay-result').classList.add('hidden');
+    // 自宅はそのまま、プレイ状態だけリセットして新しい出発地点へ
+    state.money = 1000;
+    state.hunger = 100;
+    state.thirst = 100;
+    state.playtimeSec = 0;
+    state.totalWalkMeters = 0;
+    state.workedFacilityIds = [];
+    state.hasStarted = false;
+    roadGraph.bbox = null;
+    const ok = await chooseStartLocation();
+    if(ok){
+      state.hasStarted = true;
+      drawHomeAndPlayerMarkers();
+      map.setView([state.player.lat, state.player.lon], 15);
+      await loadRoadsAround(state.player.lat, state.player.lon, 3);
+      drawHomeAndPlayerMarkers();
+      updateHud();
+      saveGame();
+    }
+  });
+
+  /* ---------------------------------------------------------------
+     9. セーブ / ロード
+     --------------------------------------------------------------- */
+  function saveGame(){
+    const data = {
+      home: state.home,
+      player: state.player,
+      money: state.money,
+      hunger: state.hunger,
+      thirst: state.thirst,
+      playtimeSec: state.playtimeSec,
+      totalWalkMeters: state.totalWalkMeters,
+      workedFacilityIds: state.workedFacilityIds,
+      hasHome: state.hasHome,
+      hasStarted: state.hasStarted,
+    };
+    try{
+      localStorage.setItem(SAVE_KEY, JSON.stringify(data));
+    }catch(err){
+      console.warn('セーブに失敗しました', err);
+    }
+  }
+
+  function loadGame(){
+    try{
+      const raw = localStorage.getItem(SAVE_KEY);
+      if(!raw) return null;
+      return JSON.parse(raw);
+    }catch(err){
+      console.warn('セーブデータの読み込みに失敗しました', err);
+      return null;
+    }
+  }
+
+  document.getElementById('fab-reset').addEventListener('click', () => {
+    if(confirm('セーブデータを削除して、自宅登録からやり直します。よろしいですか？')){
+      localStorage.removeItem(SAVE_KEY);
+      location.reload();
+    }
+  });
+
+  /* ---------------------------------------------------------------
+     10. 初期化
+     --------------------------------------------------------------- */
+  async function init(){
+    const saved = loadGame();
+
+    if(saved && saved.hasHome && saved.home && saved.player){
+      // セーブデータから復元
+      Object.assign(state, saved);
+      drawHomeAndPlayerMarkers();
+      map.setView([state.player.lat, state.player.lon], 15);
+      updateHud();
+      setLoading(true, '周辺の道路データを再取得しています...');
+      await loadRoadsAround(state.player.lat, state.player.lon, 3);
+      setLoading(false);
+      showToast('前回の続きから再開しました');
+    }else{
+      // 初回: 自宅登録を促す
+      document.getElementById('overlay-home').classList.remove('hidden');
+
+      map.once('click', async (e) => {
+        document.getElementById('overlay-home').classList.add('hidden');
+        state.home = { lat: e.latlng.lat, lon: e.latlng.lng };
+        state.hasHome = true;
+        drawHomeAndPlayerMarkers();
+        saveGame();
+
+        const ok = await chooseStartLocation();
+        if(ok){
+          state.hasStarted = true;
+          drawHomeAndPlayerMarkers();
+          map.setView([state.player.lat, state.player.lon], 15);
+          await loadRoadsAround(state.player.lat, state.player.lon, 3);
+          drawHomeAndPlayerMarkers();
+          updateHud();
+          saveGame();
+        }
+      });
+    }
+
+    // 通常のクリック（自宅登録後）は移動処理へ
+    map.on('click', (e) => {
+      if(document.getElementById('overlay-home').classList.contains('hidden') &&
+         document.getElementById('overlay-result').classList.contains('hidden') &&
+         document.getElementById('overlay-facility').classList.contains('hidden') &&
+         state.hasStarted){
+        handleMapClick(e.latlng);
+      }
+    });
+
+    // プレイ時間のカウント（現実時間のみ計測。停止中も進む＝滞在時間として計測）
+    setInterval(() => {
+      if(state.hasStarted){
+        state.playtimeSec += 1;
+        updateHud();
+      }
+    }, 1000);
+
+    // 定期オートセーブ
+    setInterval(() => { if(state.hasStarted) saveGame(); }, 5000);
+    window.addEventListener('beforeunload', () => { if(state.hasStarted) saveGame(); });
+
+    updateHud();
+  }
+
+  init();
+
+</script>
+</body>
+</html>
