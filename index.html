@@ -110,7 +110,7 @@
 
   /* 自宅登録シートは背景(dim部分)のクリックを地図へ透過させる。
      シート自体（説明文）はタップ操作に反応させないための除外。 */
-  .overlay.passthrough{ pointer-events:none; }
+  .overlay.passthrough{ pointer-events:none; background: transparent; }
   .overlay.passthrough .sheet{ pointer-events:none; }
   .sheet{
     background: var(--panel-bg);
@@ -334,6 +334,14 @@
   // 施設に「近づいた」とみなす距離
   const FACILITY_INTERACT_RADIUS_M = 80;
 
+  // 道路ノードのクラスタリング設定。
+  // OSMでは片側複数車線の道路が上り線/下り線で別のwayとして分かれていることが多く、
+  // それらの端点（ノード）が数メートル〜十数メートル離れているだけでも、
+  // グラフ上では「別地点」扱いになり、遠く離れた交差点まで大回りする原因になる。
+  // そこで一定距離以内のノードは同一地点（同じグラフノード）とみなして統合する。
+  const NODE_SNAP_DIST_M = 18;
+  const NODE_SNAP_GRID_DEG = 0.0002; // 空間インデックス用のバケツサイズ（目安として約20m四方）
+
   // 出発地点の候補（離島含む、全国に分散）。ここから道路が見つかる地点をランダム選定する。
   const START_CANDIDATES = [
     ['稚内', 45.4159, 141.6733], ['札幌', 43.0618, 141.3545], ['函館', 41.7687, 140.7288],
@@ -475,6 +483,15 @@
   }
 
   // 与えられたOverpassレスポンスからグラフを構築（既存グラフを置き換える）
+  //
+  // 近接ノードの統合について:
+  //   OSMは片側複数車線の道路を上り/下り別のwayとして分けて記録していることが多く、
+  //   そのままグラフ化すると「すぐ隣の道」でも遠くの交差点まで大回りしないと
+  //   繋がらないグラフになってしまう。
+  //   そこで NODE_SNAP_DIST_M 以内にある別ノード同士は「同一地点」とみなし、
+  //   グラフ上は1つのノード（代表ノード）に統合する。
+  //   ※ 見た目の道路線（polyline）は元のノード座標のまま描画するので、
+  //     地図表示上は上り線・下り線がそれぞれ正しく描かれる。
   function buildGraphFromElements(elements){
     roadGraph.nodes = new Map();
     roadGraph.adj = new Map();
@@ -482,11 +499,50 @@
     facilityLayer.clearLayers();
     facilities.clear();
 
+    const rawCoords = new Map();   // 元のノードID -> {lat, lon}（描画用）
+    const alias = new Map();       // 元のノードID -> 代表ノードID（統合後）
+    const gridBuckets = new Map(); // 空間インデックス: "gx_gy" -> [{aliasId, lat, lon}, ...]
+
+    function addToBucket(gx, gy, entry){
+      const key = gx + '_' + gy;
+      if(!gridBuckets.has(key)) gridBuckets.set(key, []);
+      gridBuckets.get(key).push(entry);
+    }
+
+    // 元のノードIDに対応する「代表ノードID」を求める。
+    // 近く(NODE_SNAP_DIST_M以内)に既存の代表ノードがあればそれを使い、
+    // なければ自分自身を新しい代表ノードとして登録する。
+    function resolveAlias(id, lat, lon){
+      if(alias.has(id)) return alias.get(id);
+      const gx = Math.floor(lat / NODE_SNAP_GRID_DEG);
+      const gy = Math.floor(lon / NODE_SNAP_GRID_DEG);
+
+      for(let dx=-1; dx<=1; dx++){
+        for(let dy=-1; dy<=1; dy++){
+          const bucket = gridBuckets.get((gx+dx) + '_' + (gy+dy));
+          if(!bucket) continue;
+          for(const cand of bucket){
+            if(haversineMeters(lat, lon, cand.lat, cand.lon) <= NODE_SNAP_DIST_M){
+              alias.set(id, cand.aliasId);
+              return cand.aliasId;
+            }
+          }
+        }
+      }
+
+      // 近くに代表ノードが無ければ、自分を新しい代表ノードにする
+      const aliasId = id;
+      roadGraph.nodes.set(aliasId, { lat, lon });
+      alias.set(id, aliasId);
+      addToBucket(gx, gy, { aliasId, lat, lon });
+      return aliasId;
+    }
+
+    // 1. まず全ノードの座標を記録し、施設ノードを判定する
     for(const el of elements){
       if(el.type === 'node'){
-        roadGraph.nodes.set(el.id, { lat: el.lat, lon: el.lon });
+        rawCoords.set(el.id, { lat: el.lat, lon: el.lon });
 
-        // タグを持つノードは施設候補として判定する
         if(el.tags){
           const kind = classifyFacility(el.tags);
           if(kind){
@@ -499,21 +555,29 @@
         }
       }
     }
+
+    // 2. wayごとに道路を描画し、代表ノード同士のグラフ辺を張る
     for(const el of elements){
       if(el.type === 'way' && Array.isArray(el.nodes)){
         const latlngs = [];
         for(let i=0; i<el.nodes.length; i++){
-          const n = roadGraph.nodes.get(el.nodes[i]);
-          if(n) latlngs.push([n.lat, n.lon]);
+          const c = rawCoords.get(el.nodes[i]);
+          if(c) latlngs.push([c.lat, c.lon]);
         }
         if(latlngs.length > 1){
           L.polyline(latlngs, { color:'#E8A33D', weight:2, opacity:0.55 }).addTo(roadLayer);
         }
+
         for(let i=0; i<el.nodes.length-1; i++){
-          const a = el.nodes[i], b = el.nodes[i+1];
-          const na = roadGraph.nodes.get(a), nb = roadGraph.nodes.get(b);
-          if(!na || !nb) continue;
-          const d = haversineMeters(na.lat, na.lon, nb.lat, nb.lon);
+          const ca = rawCoords.get(el.nodes[i]);
+          const cb = rawCoords.get(el.nodes[i+1]);
+          if(!ca || !cb) continue;
+
+          const a = resolveAlias(el.nodes[i], ca.lat, ca.lon);
+          const b = resolveAlias(el.nodes[i+1], cb.lat, cb.lon);
+          if(a === b) continue; // 統合済みで同一ノードになった場合は辺不要
+
+          const d = haversineMeters(ca.lat, ca.lon, cb.lat, cb.lon);
           if(!roadGraph.adj.has(a)) roadGraph.adj.set(a, []);
           if(!roadGraph.adj.has(b)) roadGraph.adj.set(b, []);
           roadGraph.adj.get(a).push({ to:b, dist:d });
