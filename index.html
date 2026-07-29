@@ -107,6 +107,11 @@
     padding-bottom: env(safe-area-inset-bottom, 16px);
   }
   .overlay.hidden{ display:none; }
+
+  /* 自宅登録シートは背景(dim部分)のクリックを地図へ透過させる。
+     シート自体（説明文）はタップ操作に反応させないための除外。 */
+  .overlay.passthrough{ pointer-events:none; }
+  .overlay.passthrough .sheet{ pointer-events:none; }
   .sheet{
     background: var(--panel-bg);
     border:1px solid var(--panel-border);
@@ -201,7 +206,7 @@
 <button id="fab-reset">最初からやり直す</button>
 
 <!-- 自宅登録シート -->
-<div id="overlay-home" class="overlay hidden">
+<div id="overlay-home" class="overlay hidden passthrough">
   <div class="sheet">
     <h2>自宅を登録しよう</h2>
     <p>地図をタップ（クリック）して、あなたの「自宅」の場所を登録してください。<br>
