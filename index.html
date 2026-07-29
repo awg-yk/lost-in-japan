@@ -227,6 +227,16 @@
   </div>
 </div>
 
+<!-- タイトル画面（はじめから / 続きから） -->
+<div id="overlay-title" class="overlay hidden">
+  <div class="sheet">
+    <h2>日本帰宅ゲーム</h2>
+    <p>徒歩・施設利用を駆使して、日本のどこかから自宅を目指す旅ゲームです。</p>
+    <button class="primary" id="btn-continue">続きから</button>
+    <button class="primary" id="btn-newgame">はじめから</button>
+  </div>
+</div>
+
 <!-- 施設シート -->
 <div id="overlay-facility" class="overlay hidden">
   <div class="sheet">
@@ -901,7 +911,7 @@
   }
 
   document.getElementById('fab-reset').addEventListener('click', () => {
-    if(confirm('セーブデータを削除して、自宅登録からやり直します。よろしいですか？')){
+    if(confirm('セーブデータを削除して、タイトル画面に戻ります。よろしいですか？')){
       localStorage.removeItem(SAVE_KEY);
       location.reload();
     }
@@ -910,53 +920,75 @@
   /* ---------------------------------------------------------------
      10. 初期化
      --------------------------------------------------------------- */
-  async function init(){
-    const saved = loadGame();
 
-    if(saved && saved.hasHome && saved.home && saved.player){
-      // セーブデータから復元
-      Object.assign(state, saved);
+  // セーブデータから状態を復元して再開する
+  async function resumeFromSave(saved){
+    Object.assign(state, saved);
+    drawHomeAndPlayerMarkers();
+    map.setView([state.player.lat, state.player.lon], 15);
+    updateHud();
+    setLoading(true, '周辺の道路データを再取得しています...');
+    await loadRoadsAround(state.player.lat, state.player.lon, 3);
+    drawHomeAndPlayerMarkers();
+    setLoading(false);
+    showToast('前回の続きから再開しました');
+  }
+
+  // 状態を初期化し、自宅登録フローを開始する（はじめから）
+  function startHomeRegistration(){
+    state.home = null;
+    state.player = null;
+    state.money = 1000;
+    state.hunger = 100;
+    state.thirst = 100;
+    state.playtimeSec = 0;
+    state.totalWalkMeters = 0;
+    state.workedFacilityIds = [];
+    state.hasHome = false;
+    state.hasStarted = false;
+    roadGraph.bbox = null;
+    roadLayer.clearLayers();
+    facilityLayer.clearLayers();
+    if(homeMarker){ map.removeLayer(homeMarker); homeMarker = null; }
+    if(playerMarker){ map.removeLayer(playerMarker); playerMarker = null; }
+
+    document.getElementById('overlay-home').classList.remove('hidden');
+
+    map.once('click', async (e) => {
+      document.getElementById('overlay-home').classList.add('hidden');
+      state.home = { lat: e.latlng.lat, lon: e.latlng.lng };
+      state.hasHome = true;
       drawHomeAndPlayerMarkers();
-      map.setView([state.player.lat, state.player.lon], 15);
-      updateHud();
-      setLoading(true, '周辺の道路データを再取得しています...');
-      await loadRoadsAround(state.player.lat, state.player.lon, 3);
-      setLoading(false);
-      showToast('前回の続きから再開しました');
-    }else{
-      // 初回: 自宅登録を促す
-      document.getElementById('overlay-home').classList.remove('hidden');
+      saveGame();
 
-      map.once('click', async (e) => {
-        document.getElementById('overlay-home').classList.add('hidden');
-        state.home = { lat: e.latlng.lat, lon: e.latlng.lng };
-        state.hasHome = true;
+      const ok = await chooseStartLocation();
+      if(ok){
+        state.hasStarted = true;
         drawHomeAndPlayerMarkers();
+        map.setView([state.player.lat, state.player.lon], 15);
+        await loadRoadsAround(state.player.lat, state.player.lon, 3);
+        drawHomeAndPlayerMarkers();
+        updateHud();
         saveGame();
+      }
+    });
+  }
 
-        const ok = await chooseStartLocation();
-        if(ok){
-          state.hasStarted = true;
-          drawHomeAndPlayerMarkers();
-          map.setView([state.player.lat, state.player.lon], 15);
-          await loadRoadsAround(state.player.lat, state.player.lon, 3);
-          drawHomeAndPlayerMarkers();
-          updateHud();
-          saveGame();
-        }
-      });
-    }
-
-    // 通常のクリック（自宅登録後）は移動処理へ
+  // 通常のクリック（自宅登録後）は移動処理へ。各種オーバーレイ表示中は無視する。
+  function setupMapClickHandler(){
     map.on('click', (e) => {
-      if(document.getElementById('overlay-home').classList.contains('hidden') &&
+      if(document.getElementById('overlay-title').classList.contains('hidden') &&
+         document.getElementById('overlay-home').classList.contains('hidden') &&
          document.getElementById('overlay-result').classList.contains('hidden') &&
          document.getElementById('overlay-facility').classList.contains('hidden') &&
          state.hasStarted){
         handleMapClick(e.latlng);
       }
     });
+  }
 
+  // プレイ時間の計測とオートセーブのタイマーを開始する
+  function setupIntervals(){
     // プレイ時間のカウント（現実時間のみ計測。停止中も進む＝滞在時間として計測）
     setInterval(() => {
       if(state.hasStarted){
@@ -968,7 +1000,31 @@
     // 定期オートセーブ
     setInterval(() => { if(state.hasStarted) saveGame(); }, 5000);
     window.addEventListener('beforeunload', () => { if(state.hasStarted) saveGame(); });
+  }
 
+  async function init(){
+    const saved = loadGame();
+    const hasValidSave = !!(saved && saved.hasHome && saved.home && saved.player);
+
+    // タイトル画面を表示。セーブがあれば「続きから」、なければ「はじめから」のみ選べる。
+    document.getElementById('overlay-title').classList.remove('hidden');
+    const btnContinue = document.getElementById('btn-continue');
+    const btnNew = document.getElementById('btn-newgame');
+    btnContinue.style.display = hasValidSave ? 'block' : 'none';
+
+    btnContinue.addEventListener('click', async () => {
+      document.getElementById('overlay-title').classList.add('hidden');
+      await resumeFromSave(saved);
+    }, { once: true });
+
+    btnNew.addEventListener('click', () => {
+      document.getElementById('overlay-title').classList.add('hidden');
+      localStorage.removeItem(SAVE_KEY);
+      startHomeRegistration();
+    }, { once: true });
+
+    setupMapClickHandler();
+    setupIntervals();
     updateHud();
   }
 
