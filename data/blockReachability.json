@@ -1,0 +1,4 @@
+{
+  "blocks": {},
+  "note": "初期プロトタイプでは§7.4に従いブロック到達可能性テーブルを省略し、直線距離の増減による簡易判定(movement.js の isReachableToward)を使用している。地点数を拡張する際は、日本を0.5度グリッド等で分割した blocks: { \"lat_lng\": { \"neighbors\": [...] } } の形にこのファイルを差し替え、isReachableToward をテーブル参照に切り替える。"
+}
