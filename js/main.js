@@ -116,7 +116,7 @@ function renderCandidates() {
         <div class="candidate-name">${c.targetName}${c.isNew ? '<span class="new-badge">未発見</span>' : ''}</div>
         <div class="candidate-meta">${candidateMetaText(c)}</div>
       </div>
-      <div class="candidate-cost">${c.cost > 0 ? fmtMoney(c.cost) : '無料'}</div>
+      <div class="candidate-cost">${c.cost > 0 ? `<span class="cost-label">運賃</span>${fmtMoney(c.cost)}` : '無料'}</div>
     `;
     card.addEventListener('click', () => onChooseCandidate(c));
     list.appendChild(card);

@@ -80,7 +80,8 @@ html, body{
 .candidate-name{ font-size:14px; font-weight:700; display:flex; align-items:center; gap:6px; }
 .candidate-name .new-badge{ font-size:10px; background: var(--accent-green); color:#08120d; border-radius:6px; padding:1px 5px; font-weight:700; }
 .candidate-meta{ font-size:11px; color: var(--text-sub); margin-top:2px; }
-.candidate-cost{ font-size:13px; font-weight:700; color: var(--accent-gold); white-space:nowrap; }
+.candidate-cost{ font-size:13px; font-weight:700; color: var(--accent-gold); white-space:nowrap; text-align:right; display:flex; flex-direction:column; align-items:flex-end; gap:1px; }
+.candidate-cost .cost-label{ font-size:10px; font-weight:600; color: var(--text-sub); }
 
 .survival-actions{ display:flex; gap:8px; margin-top:10px; }
 .survival-actions button{
