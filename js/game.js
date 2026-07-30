@@ -157,10 +157,17 @@ const Game = {
     const candidates = Movement.generateCandidates({ ...baseCtx, hitchhikeLocked: this.state.hitchhikeLocked });
 
     // 詰み回避の最終手段: ヒッチハイクがロックされていて、かつ他に取れる行動が
-    // 本当に何も無い(移動候補0件・アルバイトも不可)場合のみ、ロックを一時的に
-    // 無視してヒッチハイクを候補に戻す。「アルバイトする」というmovement.js側が
-    // 知らない選択肢の有無を踏まえた判断のため、ここ(game.js)で行う。
-    if (candidates.length === 0 && this.state.hitchhikeLocked && !this.canWork()) {
+    // 本当に何も無い(移動候補0件・アルバイトも食事も温泉も不可)場合のみ、ロックを
+    // 一時的に無視してヒッチハイクを候補に戻す。「アルバイトする/食事/温泉」という
+    // movement.js側が知らない選択肢の有無を踏まえた判断のため、ここ(game.js)で行う。
+    //
+    // 注意: canWork()は現在、空腹・体力が0の場合や同一ノードでの労働回数上限
+    // (WORK_MAX_PER_NODE)に達した場合にもfalseを返す。そのため「!canWork()」だけを
+    // 条件にすると、実際には所持金があって食事・温泉で回復できる状況でも
+    // 不必要にヒッチハイクへ強制的に賭けさせてしまう。食事・温泉の可否も
+    // 併せて確認し、本当に他に取れる手段が無い場合に限定する。
+    if (candidates.length === 0 && this.state.hitchhikeLocked &&
+        !this.canWork() && !this.canAffordEat() && !this.canAffordRest()) {
       return Movement.generateCandidates({ ...baseCtx, hitchhikeLocked: false });
     }
 
@@ -243,9 +250,18 @@ const Game = {
     return this.state.currentNodeType === 'transport';
   },
 
+  canAffordEat() {
+    return this.atTransportNode() && this.state.money >= EAT_COST;
+  },
+
+  canAffordRest() {
+    return this.atTransportNode() && this.state.money >= REST_COST;
+  },
+
   eat() {
-    if (!this.atTransportNode()) return { ok: false, message: 'ここでは食事できません。' };
-    if (this.state.money < EAT_COST) return { ok: false, message: '所持金が足りません。' };
+    if (!this.canAffordEat()) {
+      return { ok: false, message: this.atTransportNode() ? '所持金が足りません。' : 'ここでは食事できません。' };
+    }
     this.state.money -= EAT_COST;
     this.state.hunger = Math.min(100, this.state.hunger + EAT_HUNGER_GAIN);
     this.state.hitchhikeLocked = false;
@@ -254,8 +270,9 @@ const Game = {
   },
 
   rest() {
-    if (!this.atTransportNode()) return { ok: false, message: 'ここでは温泉に入れません。' };
-    if (this.state.money < REST_COST) return { ok: false, message: '所持金が足りません。' };
+    if (!this.canAffordRest()) {
+      return { ok: false, message: this.atTransportNode() ? '所持金が足りません。' : 'ここでは温泉に入れません。' };
+    }
     this.state.money -= REST_COST;
     this.state.stamina = Math.min(100, this.state.stamina + REST_STAMINA_GAIN);
     this.state.hitchhikeLocked = false;

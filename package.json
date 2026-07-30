@@ -1,0 +1,8 @@
+{
+  "name": "journey-home-japan",
+  "private": true,
+  "description": "日本帰宅ゲーム(Journey Home Japan) — ビルドツール不要の素のHTML/CSS/JS。テストのみNode(node:test)を使用。",
+  "scripts": {
+    "test": "node --test tests/*.test.js"
+  }
+}

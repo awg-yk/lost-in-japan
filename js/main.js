@@ -31,22 +31,6 @@ function setLoading(visible, text) {
 function showOverlay(id) { document.getElementById(id).classList.remove('hidden'); }
 function hideOverlay(id) { document.getElementById(id).classList.add('hidden'); }
 
-// stations.jsonのconnectionsは片方向のみ定義されているため、
-// 起動時に一度だけ逆方向の接続を補完する(通常は双方向に移動できるため)。
-function ensureReciprocalConnections(stations) {
-  const byId = new Map(stations.map(s => [s.id, s]));
-  const originalEdges = [];
-  stations.forEach(s => s.connections.forEach(c => originalEdges.push({ from: s.id, ...c })));
-  originalEdges.forEach(edge => {
-    const target = byId.get(edge.toId);
-    if (!target) return;
-    const hasReverse = target.connections.some(c => c.toId === edge.from && c.mode === edge.mode && c.cost === edge.cost);
-    if (!hasReverse) {
-      target.connections.push({ toId: edge.from, mode: edge.mode, requiresTransport: edge.requiresTransport, cost: edge.cost, isBudget: !!edge.isBudget });
-    }
-  });
-}
-
 async function loadData() {
   const [placesRes, stationsRes, blockReachabilityRes] = await Promise.all([
     fetch('data/places.json'),
@@ -59,7 +43,7 @@ async function loadData() {
   const places = placesJson.places;
   const stations = stationsJson.nodes;
 
-  ensureReciprocalConnections(stations);
+  DataUtils.ensureReciprocalConnections(stations);
 
   return {
     places,
@@ -163,9 +147,8 @@ function renderCandidates() {
   list.innerHTML = '';
   const candidates = Game.getCandidates();
   const canWork = Game.canWork();
-  const atTransportNode = Game.atTransportNode();
-  const canEat = atTransportNode && Game.state.money >= window.EAT_COST;
-  const canRest = atTransportNode && Game.state.money >= window.REST_COST;
+  const canEat = Game.canAffordEat();
+  const canRest = Game.canAffordRest();
 
   if (candidates.length === 0 && !canWork && !canEat && !canRest) {
     list.innerHTML = '<div class="candidate-meta">近くに移動できる場所が見つかりません。</div>';
