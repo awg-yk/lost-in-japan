@@ -35,7 +35,8 @@ function percentile(sortedArr, p) {
 
 function runSweep(policyName, difficulty, seedCount, maxSteps) {
   const stepsArr = [];
-  let notArrived = 0;
+  let gameOverCount = 0;
+  let unresolved = 0; // 手数上限に達しても到着もゲームオーバーもしなかった(要調査)
   let stuck = 0;
   let violationGames = 0;
 
@@ -51,7 +52,12 @@ function runSweep(policyName, difficulty, seedCount, maxSteps) {
     });
     if (result.violations.length > 0) violationGames++;
     if (result.stuck) { stuck++; continue; }
-    if (!result.arrived) { notArrived++; continue; }
+    // 2026-07-30: 行動不能によるゲームオーバーは意図された正規の終了状態
+    // (到着と同じく「解決済み」)なので、到着とは別集計にしつつ手数分布には含めない
+    // (ゲームオーバーは「進み続けた結果の手数」ではなく、経済的に詰んだ結果のため
+    // 意味合いが異なる)。
+    if (result.gameOver) { gameOverCount++; continue; }
+    if (!result.arrived) { unresolved++; continue; }
     stepsArr.push(result.steps);
   }
 
@@ -61,7 +67,7 @@ function runSweep(policyName, difficulty, seedCount, maxSteps) {
   return {
     policyName, difficulty, seedCount,
     arrived: stepsArr.length,
-    notArrived, stuck, violationGames,
+    gameOverCount, unresolved, stuck, violationGames,
     avg, median: percentile(stepsArr, 0.5), p90: percentile(stepsArr, 0.9), p99: percentile(stepsArr, 0.99),
     max: stepsArr.length ? stepsArr[stepsArr.length - 1] : null,
   };
@@ -72,13 +78,14 @@ function fmt(n) { return n === null || n === undefined ? '-' : (typeof n === 'nu
 function main() {
   const args = parseArgs(process.argv.slice(2));
   console.log(`balance_harness: seeds=${args.seeds} maxSteps=${args.maxSteps}`);
-  console.log('policy'.padEnd(10), 'difficulty'.padEnd(8), 'arrived'.padEnd(8), 'stuck'.padEnd(6), 'viol'.padEnd(6), 'avg'.padEnd(7), 'median'.padEnd(7), 'p90'.padEnd(6), 'p99'.padEnd(6), 'max');
+  console.log('policy'.padEnd(10), 'difficulty'.padEnd(8), 'arrived'.padEnd(8), 'gameOver'.padEnd(9), 'unresolved'.padEnd(11), 'stuck'.padEnd(6), 'viol'.padEnd(6), 'avg'.padEnd(7), 'median'.padEnd(7), 'p90'.padEnd(6), 'p99'.padEnd(6), 'max');
   for (const policyName of args.policies) {
     for (const difficulty of args.difficulties) {
       const r = runSweep(policyName, difficulty, args.seeds, args.maxSteps);
       console.log(
         r.policyName.padEnd(10), r.difficulty.padEnd(8),
-        `${r.arrived}/${r.seedCount}`.padEnd(8), String(r.stuck).padEnd(6), String(r.violationGames).padEnd(6),
+        `${r.arrived}/${r.seedCount}`.padEnd(8), String(r.gameOverCount).padEnd(9), String(r.unresolved).padEnd(11),
+        String(r.stuck).padEnd(6), String(r.violationGames).padEnd(6),
         fmt(r.avg).padEnd(7), fmt(r.median).padEnd(7), fmt(r.p90).padEnd(6), fmt(r.p99).padEnd(6), fmt(r.max)
       );
     }

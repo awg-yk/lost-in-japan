@@ -92,6 +92,13 @@ html, body{
 .candidate-preview{ font-size:8px; color: var(--text-sub); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .candidate-cost .cost-label{ font-size:8px; font-weight:600; color: var(--text-sub); margin-right:2px; }
 
+/* 「休憩」(アルバイト・食事・温泉)と「移動」を1行目/2〜3行目にはっきり分ける。
+   休憩側は左に細いアクセント線、移動側は上に区切り線を付けて視覚的に区別する
+   (押し間違い防止のためのユーザー指示)。 */
+.candidate-card--action{ border-left: 3px solid var(--accent-stamina); }
+.candidate-card--move{ border-left: 3px solid var(--accent-indigo); }
+.candidate-slot-empty{ visibility:hidden; }
+
 .survival-actions{ display:flex; gap:8px; margin-top:10px; }
 .survival-actions button{
   flex:1; padding:10px; border-radius:10px; border:1px solid var(--panel-border);

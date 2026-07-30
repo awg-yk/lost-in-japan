@@ -19,8 +19,8 @@ const DIFFICULTY_PRESETS = {
 // 体力は「歩いた」ことによる身体的消耗のみで減少する(電車や飛行機に乗っている間は消耗しない)。
 const HUNGER_DECAY_PER_KM = 0.06;
 const STAMINA_DECAY_PER_KM_WALK = 1.1;
-const HITCHHIKE_FAIL_HUNGER_COST = 3;
-const HITCHHIKE_FAIL_STAMINA_COST = 4;
+// ヒッチハイク失敗時は固定値ではなく、空腹・体力をその場で半分にする
+// (2026-07-30変更。js/game.js の chooseCandidate 内で `/= 2` として実装)。
 
 const EAT_COST = 300;
 const EAT_HUNGER_GAIN = 45;
@@ -136,14 +136,15 @@ const Game = {
     }
 
     // 直近数手のうちに現在地へ何度も舞い戻っている(=往復振動している)場合、
-    // 直線距離ヒューリスティックの誤判定で足止めされている可能性が高いとみなし、
-    // movement.js側で交通機関の方向性フィルタを一時的に外させる。
+    // 同じ場所に3回以上舞い戻っているなら、直前地点への逆戻りを今回だけ禁止し、
+    // 強制的に別の選択肢を取らせて往復ループを断ち切る。
+    // (以前はrevisitCount>=2で交通機関の方向性フィルタ自体を丸ごと外す
+    // forceUnfilteredTransportもあったが、目的地方向の正しい候補が既にあるのに
+    // 遠ざかる候補まで紛れ込む不具合の原因だったため2026-07-30に削除した。
+    // movement.js側は「フィルタ後0件のときのみ」フィルタなしにフォールバックする)。
     const RECENT_WINDOW = 8;
     const recentVisits = history.slice(-RECENT_WINDOW);
     const revisitCount = recentVisits.filter(m => m.toId === this.state.currentNodeId && m.toType === this.state.currentNodeType).length;
-    const forceUnfilteredTransport = revisitCount >= 2;
-    // 同じ場所に3回以上舞い戻っている場合は、直前地点への逆戻りを今回だけ禁止し、
-    // 強制的に別の選択肢を取らせて往復ループを断ち切る。
     const bannedTarget = revisitCount >= 3 && recentNodeIds[0] ? recentNodeIds[0] : null;
 
     const baseCtx = {
@@ -157,7 +158,6 @@ const Game = {
       placesById: this.data.placesById,
       discoveredIds: this.state.discoveredIds,
       recentNodeIds,
-      forceUnfilteredTransport,
       bannedTarget,
       reachability: this.reachability,
       hitchhikeLuckBonus: this.difficultyPreset().hitchhikeLuckBonus,
@@ -192,13 +192,19 @@ const Game = {
     if (candidate.mode === 'hitchhike') {
       const success = Math.random() < candidate.successRate;
       if (!success) {
-        s.hunger = Math.max(0, s.hunger - HITCHHIKE_FAIL_HUNGER_COST);
-        s.stamina = Math.max(0, s.stamina - HITCHHIKE_FAIL_STAMINA_COST);
+        // 2026-07-30変更: ヒッチハイクは「運賃を払えないとき」の最終手段に
+        // 位置づけたため、失敗時のペナルティを固定値(-3/-4)から空腹・体力を
+        // それぞれ半分にする方式へ強化した(ユーザー指示。お金が無い状態での
+        // 失敗が実際に痛手になるようにするため)。Math.floorで整数に丸めることで、
+        // 単純な division だけだと理論上ゼロに漸近するだけで正確な0に到達しない
+        // (浮動小数点の性質上、行動不能判定`<=0`がほぼ永久に成立しない)問題を防ぐ。
+        s.hunger = Math.floor(s.hunger / 2);
+        s.stamina = Math.floor(s.stamina / 2);
         // §実装時の裁量: ヒッチハイクが強すぎるとのフィードバックを受け、
         // 失敗した場合は別の選択肢を選ぶまでヒッチハイクを候補から除外する。
         s.hitchhikeLocked = true;
         Save.write(s);
-        return { ok: false, message: 'ヒッチハイクは失敗した…足止めをくらった。(他の方法を試すまでヒッチハイクはできない)', arrived: false };
+        return { ok: false, message: 'ヒッチハイクは失敗した…足止めをくらい、空腹と体力が半分になった。(他の方法を試すまでヒッチハイクはできない)', arrived: false, gameOver: this.checkGameOver() };
       }
     } else if (candidate.cost > 0) {
       if (s.money < candidate.cost) return { ok: false, message: '所持金が足りません。', arrived: false };
@@ -239,7 +245,7 @@ const Game = {
     const baseMessage = candidate.cost > 0
       ? `${candidate.targetName} に到着した(運賃 ¥${candidate.cost.toLocaleString()})。`
       : `${candidate.targetName} に到着した。`;
-    return { ok: true, message: eventMessage ? `${baseMessage}\n${eventMessage}` : baseMessage, arrived };
+    return { ok: true, message: eventMessage ? `${baseMessage}\n${eventMessage}` : baseMessage, arrived, gameOver: this.checkGameOver() };
   },
 
   triggerRandomEvent() {
@@ -252,10 +258,6 @@ const Game = {
     return null;
   },
 
-  // 食事・温泉は、現在地が交通ノード(駅・空港・港)であることを前提とする
-  // (§実装時の裁量: 本来は地点ごとの実際の飲食店・温泉データに応じるべきだが、
-  // 実データ整備前の暫定として、駅・空港であれば一律に利用できることにしている)。
-  // アルバイトは観光名所側の条件(atSightseeingPlace)を使うため対象外。
   atTransportNode() {
     return this.state.currentNodeType === 'transport';
   },
@@ -267,34 +269,42 @@ const Game = {
     return this.state.currentNodeType === 'place';
   },
 
+  // 食事・温泉は、交通ノード(駅・空港・港)・観光名所のどちらでも利用できる
+  // (2026-07-30変更: 観光名所でもアルバイトに加えて食事・温泉ができるように
+  // した。§実装時の裁量: 本来は地点ごとの実際の飲食店・温泉データに応じる
+  // べきだが、実データ整備前の暫定として一律に利用できることにしている)。
+  atRecoverableNode() {
+    return this.atTransportNode() || this.atSightseeingPlace();
+  },
+
   canAffordEat() {
-    return this.atTransportNode() && this.state.money >= EAT_COST;
+    return this.atRecoverableNode() && this.state.money >= EAT_COST;
   },
 
   canAffordRest() {
-    return this.atTransportNode() && this.state.money >= REST_COST;
+    return this.atRecoverableNode() && this.state.money >= REST_COST;
   },
 
   eat() {
     if (!this.canAffordEat()) {
-      return { ok: false, message: this.atTransportNode() ? '所持金が足りません。' : 'ここでは食事できません。' };
+      return { ok: false, message: this.atRecoverableNode() ? '所持金が足りません。' : 'ここでは食事できません。' };
     }
     this.state.money -= EAT_COST;
     this.state.hunger = Math.min(100, this.state.hunger + EAT_HUNGER_GAIN);
     this.state.hitchhikeLocked = false;
     Save.write(this.state);
-    return { ok: true, message: `食事をとった(¥${EAT_COST})。` };
+    return { ok: true, message: `食事をとった(¥${EAT_COST})。`, gameOver: this.checkGameOver() };
   },
 
   rest() {
     if (!this.canAffordRest()) {
-      return { ok: false, message: this.atTransportNode() ? '所持金が足りません。' : 'ここでは温泉に入れません。' };
+      return { ok: false, message: this.atRecoverableNode() ? '所持金が足りません。' : 'ここでは温泉に入れません。' };
     }
     this.state.money -= REST_COST;
     this.state.stamina = Math.min(100, this.state.stamina + REST_STAMINA_GAIN);
     this.state.hitchhikeLocked = false;
     Save.write(this.state);
-    return { ok: true, message: `温泉に入って体力を回復した(¥${REST_COST})。` };
+    return { ok: true, message: `温泉に入って体力を回復した(¥${REST_COST})。`, gameOver: this.checkGameOver() };
   },
 
   // アルバイト: 観光名所(地点データ)であれば働けるが、以下の条件で制限する。
@@ -335,7 +345,23 @@ const Game = {
     // アルバイトも「別の選択肢」の一つなので、ヒッチハイク失敗ロックを解除する。
     this.state.hitchhikeLocked = false;
     Save.write(this.state);
-    return { ok: true, message: `${node.name}でアルバイトして ¥${WORK_WAGE.toLocaleString()} 稼いだ(体力 -${WORK_STAMINA_COST} ・ 空腹 -${WORK_HUNGER_COST})。` };
+    return { ok: true, message: `${node.name}でアルバイトして ¥${WORK_WAGE.toLocaleString()} 稼いだ(体力 -${WORK_STAMINA_COST} ・ 空腹 -${WORK_HUNGER_COST})。`, gameOver: this.checkGameOver() };
+  },
+
+  // 行動不能判定(2026-07-30、ユーザー指示による新規追加): 所持金が無く(0以下)、
+  // かつ空腹・体力の両方が0の場合、これ以上取れる行動が実質無い
+  // (食事・温泉はお金が要り、アルバイトは空腹/体力0で不可)とみなしてゲームオーバーにする。
+  // ヒッチハイクは所持金が無いときの最終手段として使えるが、それでもこの状態を
+  // 「詰み」ではなく「現実的な失敗」として扱う、というユーザーの意図を反映している。
+  isIncapacitated() {
+    const s = this.state;
+    return s.money <= 0 && s.hunger <= 0 && s.stamina <= 0;
+  },
+
+  checkGameOver() {
+    const over = this.isIncapacitated();
+    this.state.gameOver = over;
+    return over;
   },
 
   tickPlayTime() {

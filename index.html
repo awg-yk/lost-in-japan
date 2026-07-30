@@ -80,6 +80,19 @@
   </div>
 </div>
 
+<div id="overlay-gameover" class="overlay hidden">
+  <div class="sheet">
+    <h2>行き倒れてしまった…💦</h2>
+    <p>所持金が尽き、空腹も体力も限界を迎えてしまいました。旅はここで終了です。</p>
+    <div class="result-grid">
+      <div class="k">プレイ時間</div><div class="v" id="gameover-time">--</div>
+      <div class="k">総移動距離</div><div class="v" id="gameover-distance">--</div>
+      <div class="k">訪問地点数</div><div class="v" id="gameover-visited">--</div>
+    </div>
+    <button class="primary" id="btn-gameover-retry">最初からやり直す</button>
+  </div>
+</div>
+
 <div id="loading" class="hidden">読み込み中...</div>
 
 <script src="lib/leaflet/leaflet.js"></script>

@@ -242,6 +242,23 @@ function generateCandidates(ctx) {
   // --- 徒歩候補(寄り道も許可) ---
   const nearby = getNearbyNodes(currentNode.lat, currentNode.lng, walkRadius, spatialIndex, currentNode.id);
   for (const { node, distanceKm } of nearby) {
+    // progressScoreにはctx.reachability(グラフ最短距離)を渡す(以前は未指定で
+    // 常に直線距離フォールバックになっていた。Phase2の趣旨に沿って修正)。
+    const progress = progressScore(currentNode, node, destinationNode, ctx.reachability);
+
+    // 既に訪れた観光名所(地点データ)で、かつ目的地への進行にも寄与しない
+    // (progress<=0の)場合は候補から外したい(§実装時の裁量。ユーザー指示。
+    // 発見報酬も無く、目的地に近づきもしない寄り道を候補に出し続けるのは
+    // 選択の邪魔になるだけのため)。交通ノードは経路継続に必要なので対象外。
+    //
+    // ただし孤立した交通ノード(例: 目的地行きの高額なflight-only接続1本しか
+    // 無い離島の空港)では、その観光名所への徒歩が唯一の行動(=そこでしか
+    // アルバイトができない)であることがあり、無条件に除外すると本当に候補が
+    // 0件になって詰んでしまう(2026-07-30、実際にシミュレーションで発見)。
+    // そのため即座に除外せず`prunable`としてマークし、他に候補が残る場合に
+    // 限って末尾でまとめて除外する(bannedTargetと同じ「最後の1つは残す」方針)。
+    const prunable = node._type === 'place' && discoveredSet.has(node.id) && progress <= 0;
+
     candidates.push({
       key: `walk_${node._type}_${node.id}`,
       targetId: node.id,
@@ -253,8 +270,9 @@ function generateCandidates(ctx) {
       isBudget: false,
       discoveryScore: node.discoveryScore || 0,
       isNew: !discoveredSet.has(node.id),
+      prunable,
       score: candidateScore({
-        progress: progressScore(currentNode, node, destinationNode),
+        progress,
         discoveryScore: effectiveDiscovery(node),
         transportScore: transportScoreOf(node, stationsById),
       }),
@@ -279,7 +297,7 @@ function generateCandidates(ctx) {
         discoveryScore: station.discoveryScore || 0,
         isNew: !discoveredSet.has(station.id),
         score: candidateScore({
-          progress: progressScore(currentNode, station, destinationNode),
+          progress: progressScore(currentNode, station, destinationNode, ctx.reachability),
           discoveryScore: effectiveDiscovery(station),
           transportScore: transportScoreOf({ _type: 'transport', connections: station.connections }, stationsById),
         }),
@@ -325,13 +343,13 @@ function generateCandidates(ctx) {
       }
 
       // ヒッチハイク候補(flightのみで隔てられた区間では不可。§7.1.1)
-      // Phase3: 失敗すればその場に留まるだけ(進まない)なので、期待値としての
-      // 進行度は progress * successRate になる。これをスコアに反映しないと、
-      // 無料・高成功率のヒッチハイクが常に有料交通機関を上回ってしまい
-      // (シミュレーションで実際に確認)、所持金を使う理由が無くなってしまう。
+      // 2026-07-30変更(ユーザー指示): ヒッチハイクは「この区間の運賃を
+      // 払えない場合」にのみ候補に出す(money < conn.cost)。所持金があるのに
+      // 無料のヒッチハイクが有料交通機関を押しのけて選ばれ続けるのを防ぎ、
+      // 「お金が無いときの最終手段」という位置づけをはっきりさせるため。
       // また、直前にヒッチハイクが失敗した場合は allowHitchhike=false になり、
       // 別の選択肢を選ぶまで候補からヒッチハイクを一切外す(強すぎる、との要望)。
-      if (!flightOnly && allowHitchhike) {
+      if (!flightOnly && allowHitchhike && money < conn.cost) {
         const isFerry = conn.requiresTransport.includes('ferry');
         const baseRate = isFerry ? HITCHHIKE_BASE_RATE_FERRY : HITCHHIKE_BASE_RATE_LAND;
         // 難易度の「ラッキー度」補正(EASYはプラス、HARDはマイナス)。§実装時の裁量。
@@ -357,13 +375,17 @@ function generateCandidates(ctx) {
     return result;
   }
 
-  // 通常は目的地方向のみフィルタする。ただし直線距離ヒューリスティックが分岐点で
-  // 「進行方向を保つ接続が無い」と誤判定し、同じ地点を往復し続けてしまう場合の
-  // 救済として、その状況を検知した呼び出し元(game.js)からの合図で
-  // フィルタなしの全接続を候補にする(§7.1.1の詰み防止の趣旨に沿った措置)。
+  // 通常は目的地方向のみフィルタする。目的地から遠ざかる接続(フィルタ後
+  // 0件になった場合の最終フォールバック)だけ、詰み防止のためフィルタなしで
+  // 候補に加える(§7.1.1の詰み防止の趣旨に沿った措置)。
+  // 2026-07-30修正: 以前は「直近で同じ地点に2回以上舞い戻っている
+  // (ctx.forceUnfilteredTransport)」だけでもフィルタなし全接続に総入れ替え
+  // していたため、目的地方向の正しい候補が既にあるのに、わざわざ遠ざかる
+  // ヒッチハイク等が候補に紛れ込む(ユーザー指摘の「なぜか遠ざかる候補が出る」
+  // 不具合の原因)。フィルタ後の候補が実際に0件のときだけフォールバックするよう修正。
   const allowHitchhike = !ctx.hitchhikeLocked;
   let transportCandidates = buildTransportCandidates(true, allowHitchhike);
-  if (transportCandidates.length === 0 || ctx.forceUnfilteredTransport) {
+  if (transportCandidates.length === 0) {
     transportCandidates = buildTransportCandidates(false, allowHitchhike);
   }
   candidates.push(...transportCandidates);
@@ -377,9 +399,16 @@ function generateCandidates(ctx) {
   // (banTarget自体しか選択肢が無い場合は除外しない=詰み回避を優先)。
   let finalCandidates = candidates;
   if (ctx.bannedTarget) {
-    const filtered = candidates.filter(c => !(c.targetId === ctx.bannedTarget.id && c.targetType === ctx.bannedTarget.type));
+    const filtered = finalCandidates.filter(c => !(c.targetId === ctx.bannedTarget.id && c.targetType === ctx.bannedTarget.type));
     if (filtered.length > 0) finalCandidates = filtered;
   }
+
+  // 既に訪れた・進行にも寄与しない観光名所(prunable、上記コメント参照)を、
+  // 他に候補が残る場合に限って除外する。ここで初めて除外することで、
+  // 「そこへの徒歩だけが唯一の行動」という孤立した交通ノードでの詰みを防ぐ。
+  const pruned = finalCandidates.filter(c => !c.prunable);
+  if (pruned.length > 0) finalCandidates = pruned;
+  finalCandidates.forEach(c => { delete c.prunable; });
 
   // ヒッチハイクロックにより候補が0件になり得る場合の詰み回避は、ここでは行わない。
   // movement.jsは「アルバイトする」等の非移動アクションの存在を知らないため、

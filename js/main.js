@@ -94,7 +94,7 @@ function candidatePreviewText(c) {
 function buildWorkCard() {
   const preview = Game.workPreview();
   const card = document.createElement('button');
-  card.className = 'candidate-card';
+  card.className = 'candidate-card candidate-card--action';
   card.innerHTML = `
     <div class="candidate-cost earn">+${fmtMoney(preview.wage)}</div>
     <div class="candidate-icon">💼</div>
@@ -112,7 +112,7 @@ function buildWorkCard() {
 // 駅・空港であれば一律に利用できる候補として出す(§実装時の裁量)。
 function buildEatCard() {
   const card = document.createElement('button');
-  card.className = 'candidate-card';
+  card.className = 'candidate-card candidate-card--action';
   card.innerHTML = `
     <div class="candidate-cost"><span class="cost-label">料金</span>${fmtMoney(window.EAT_COST)}</div>
     <div class="candidate-icon">🍙</div>
@@ -128,7 +128,7 @@ function buildEatCard() {
 
 function buildRestCard() {
   const card = document.createElement('button');
-  card.className = 'candidate-card';
+  card.className = 'candidate-card candidate-card--action';
   card.innerHTML = `
     <div class="candidate-cost"><span class="cost-label">料金</span>${fmtMoney(window.REST_COST)}</div>
     <div class="candidate-icon">♨️</div>
@@ -141,6 +141,19 @@ function buildRestCard() {
   card.addEventListener('click', onRest);
   return card;
 }
+
+function buildEmptySlot() {
+  const el = document.createElement('div');
+  el.className = 'candidate-slot-empty';
+  return el;
+}
+
+// 「休憩」(アルバイト・食事・温泉、その場での行動)と「移動」(徒歩・鉄道・
+// ヒッチハイク等)を、3x3グリッドの1行目/2〜3行目にはっきり分けて表示する
+// (2026-07-30、ユーザー指示。押し間違いを減らすため)。休憩側は常に3マス分
+// (最大3個)を確保し、足りない分は空マスで埋めることで、移動候補が常に
+// 2行目から始まるようにする(候補数によって位置がずれないようにするため)。
+const ACTION_SLOT_COUNT = 3;
 
 function renderCandidates() {
   const list = document.getElementById('candidate-list');
@@ -156,14 +169,16 @@ function renderCandidates() {
     return;
   }
 
-  // アルバイト・食事・温泉は「移動」ではなく「その場での行動」なので、選択肢の先頭に別枠で出す。
-  if (canWork) list.appendChild(buildWorkCard());
-  if (canEat) list.appendChild(buildEatCard());
-  if (canRest) list.appendChild(buildRestCard());
+  const actionCards = [];
+  if (canWork) actionCards.push(buildWorkCard());
+  if (canEat) actionCards.push(buildEatCard());
+  if (canRest) actionCards.push(buildRestCard());
+  while (actionCards.length < ACTION_SLOT_COUNT) actionCards.push(buildEmptySlot());
+  actionCards.forEach(el => list.appendChild(el));
 
   candidates.forEach(c => {
     const card = document.createElement('button');
-    card.className = 'candidate-card';
+    card.className = 'candidate-card candidate-card--move';
     const preview = candidatePreviewText(c);
     card.innerHTML = `
       <div class="candidate-cost">${c.cost > 0 ? `<span class="cost-label">運賃</span>${fmtMoney(c.cost)}` : '無料'}</div>
@@ -192,6 +207,7 @@ function onWork() {
   const result = Game.work();
   toast(result.message);
   renderHud();
+  if (result.gameOver) { showGameOver(); return; }
   renderCandidates();
 }
 
@@ -199,6 +215,7 @@ function onEat() {
   const result = Game.eat();
   toast(result.message);
   renderHud();
+  if (result.gameOver) { showGameOver(); return; }
   renderCandidates();
 }
 
@@ -206,6 +223,7 @@ function onRest() {
   const result = Game.rest();
   toast(result.message);
   renderHud();
+  if (result.gameOver) { showGameOver(); return; }
   renderCandidates();
 }
 
@@ -214,6 +232,10 @@ function onChooseCandidate(candidate) {
   const result = Game.chooseCandidate(candidate);
   toast(result.message);
   renderHud();
+
+  // 所持金・空腹・体力が尽きた(行動不能)場合はゲームオーバー画面へ。
+  // ヒッチハイク失敗時にもgameOverが立ち得る(現在地は変わらない)。
+  if (result.gameOver) { showGameOver(); return; }
 
   // ヒッチハイク失敗や所持金不足の場合は現在地が変わっていないため、
   // 地図上のマーカーも動かさない(移動した見た目にならないようにする)。
@@ -231,6 +253,16 @@ function onChooseCandidate(candidate) {
     return;
   }
   renderCandidates();
+}
+
+function showGameOver() {
+  const s = Game.state;
+  document.getElementById('gameover-time').textContent = fmtTime(s.playTimeSec);
+  document.getElementById('gameover-distance').textContent = fmtKm(s.totalDistanceKm);
+  document.getElementById('gameover-visited').textContent = s.visitedIds.length;
+  MapView.clearCandidatePreview();
+  document.getElementById('candidate-panel').classList.add('hidden');
+  showOverlay('overlay-gameover');
 }
 
 function showResult() {
@@ -296,6 +328,13 @@ function setupPlayAgain() {
   });
 }
 
+function setupGameOverRetry() {
+  document.getElementById('btn-gameover-retry').addEventListener('click', () => {
+    hideOverlay('overlay-gameover');
+    showOverlay('overlay-title');
+  });
+}
+
 function setupDifficultyButtons() {
   ['easy', 'normal', 'hard'].forEach((difficulty) => {
     document.getElementById(`btn-${difficulty}`).addEventListener('click', () => {
@@ -305,15 +344,19 @@ function setupDifficultyButtons() {
   });
 }
 
+function isGameActive() {
+  return !!Game.state && !Game.state.arrived && !Game.state.gameOver;
+}
+
 function setupIntervals() {
   setInterval(() => {
-    if (Game.state && !Game.state.arrived) {
+    if (isGameActive()) {
       Game.tickPlayTime();
       renderHud();
     }
   }, 1000);
-  setInterval(() => { if (Game.state && !Game.state.arrived) Save.write(Game.state); }, 5000);
-  window.addEventListener('beforeunload', () => { if (Game.state && !Game.state.arrived) Save.write(Game.state); });
+  setInterval(() => { if (isGameActive()) Save.write(Game.state); }, 5000);
+  window.addEventListener('beforeunload', () => { if (isGameActive()) Save.write(Game.state); });
 }
 
 async function init() {
@@ -329,6 +372,7 @@ async function init() {
   setupDifficultyButtons();
   setupResetButton();
   setupPlayAgain();
+  setupGameOverRetry();
   setupIntervals();
 }
 

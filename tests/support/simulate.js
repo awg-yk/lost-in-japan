@@ -16,16 +16,20 @@
 
 const EAT_THRESHOLD = 30;
 const REST_THRESHOLD = 30;
-// 所持金が少なく、かつ移動方策が選んだ候補がスコア0以下(=進行度がほぼ無い・
-// マイナスの弱い手)の場合に限り、移動よりアルバイトを優先する。
+// 所持金が少なく、かつ移動方策が選んだ候補のスコアがさほど高くない場合、
+// 移動よりアルバイトを優先する。
 // (フェリー・空港ルートには運賃が数千円かかるものがあり、無計画に歩き回るだけの
 // 単純な方策だと、稼ぐという選択肢を一切使わず所持金不足で足止めされるケースが
 // あった。逆に「候補のスコアを見ずに所持金だけで無条件にアルバイトを優先する」
 // 実装にすると、今度は運賃を払えば取れる好スコアな候補があるのに、あえて
-// アルバイトを選んで足止めしてしまうケースが新たに生じた。そのため
-// 「今回選ぼうとした手が弱い(スコア<=0)ときだけ」働くことを優先する)。
+// アルバイトを選んで足止めしてしまうケースが新たに生じた。閾値0(スコア<=0の
+// ときだけ働く)も試したが、2026-07-30のヒッチハイク仕様変更(お金が無い時のみ
+// 候補に出る/失敗時に空腹体力半減)後は「まずまずのスコア(0〜0.2程度)の手を
+// 選び続けて資金が尽きる」ケースが残ったため、0.3まで引き上げた
+// (好スコア[目的地方向への確実な前進等]の手は0.3を超えることが多く、その場合は
+// 引き続き移動を優先する)。
 const MONEY_LOW_THRESHOLD = 3000;
-const WEAK_CANDIDATE_SCORE = 0;
+const WEAK_CANDIDATE_SCORE = 0.3;
 
 function canAffordEat(sandbox) {
   return sandbox.Game.canAffordEat();
@@ -84,7 +88,7 @@ function simulateGame({ sandbox, difficulty = 'normal', movementPolicy, seed, ma
   const actionLog = [];
 
   for (let step = 1; step <= maxSteps; step++) {
-    if (Game.state.arrived) break;
+    if (Game.state.arrived || Game.state.gameOver) break;
 
     // Game.getCandidates()は1ステップにつきちょうど1回だけ呼ぶ(乱数消費を実プレイと揃えるため)。
     const candidates = Game.getCandidates();
@@ -99,7 +103,7 @@ function simulateGame({ sandbox, difficulty = 'normal', movementPolicy, seed, ma
 
     const action = decideAction(sandbox, candidates, movementPolicy, { workHeavyOverride });
     if (!action) {
-      return { arrived: false, stuck: true, steps: step - 1, violations, actionLog, state: { ...Game.state } };
+      return { arrived: false, gameOver: false, stuck: true, steps: step - 1, violations, actionLog, state: { ...Game.state } };
     }
 
     let result;
@@ -120,10 +124,17 @@ function simulateGame({ sandbox, difficulty = 'normal', movementPolicy, seed, ma
     if (Game.workCountAtCurrentNode() > 3) {
       violations.push(`step ${step}: worked more than 3 times at node ${s.currentNodeId} (${Game.workCountAtCurrentNode()})`);
     }
+
+    // 実際のUI(main.js)はGame Over時にそれ以上の入力を受け付けない
+    // (result.gameOverを見てオーバーレイを出し、renderCandidates()を呼ばない)ため、
+    // シミュレーターもここで打ち切る(そうしないと0/0ゲージのまま無為に手数だけ
+    // 積み上げてしまい、詰みでも到着でもない偽の「未到着」を報告してしまう)。
+    if (result.gameOver) break;
   }
 
   return {
     arrived: !!Game.state.arrived,
+    gameOver: !!Game.state.gameOver,
     stuck: false,
     steps: actionLog.length,
     violations,

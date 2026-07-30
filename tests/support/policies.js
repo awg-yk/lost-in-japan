@@ -21,10 +21,17 @@ const POLICIES = {
   },
 
   // 徒歩以外(鉄道・飛行機・船・ヒッチハイク)を優先する最短ルート型。
+  // 2026-07-30修正: 当初は「非徒歩候補が1つでもあれば絶対にそれを選ぶ」という
+  // 絶対的フィルタだったが、これだと非徒歩の選択肢(特にヒッチハイク)だけで
+  // 2地点を無限に往復してしまい抜け出せなくなるケースが実際にテストで見つかった
+  // (徒歩で観光名所へ寄り道して稼ぐ、という選択肢を仕組み上絶対に選べないため)。
+  // 絶対禁止ではなく大きめのスコア加算による「強い好み」に変更し、非徒歩options
+  // が本当に悪い場合は徒歩(観光名所での資金稼ぎ等)にも逃げられるようにした。
   rush(candidates) {
-    const nonWalk = candidates.filter(c => c.mode !== 'walk');
-    if (nonWalk.length > 0) return nonWalk[0];
-    return candidates[0] || null;
+    const NON_WALK_BONUS = 0.2;
+    const withBonus = candidates.map(c => ({ c, adjusted: c.score + (c.mode !== 'walk' ? NON_WALK_BONUS : 0) }));
+    withBonus.sort((a, b) => b.adjusted - a.adjusted);
+    return withBonus.length > 0 ? withBonus[0].c : null;
   },
 
   // 移動選択自体はgreedyと同じ。simulate.js側のworkHeavyOverride と組み合わせて、
