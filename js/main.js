@@ -48,12 +48,14 @@ function ensureReciprocalConnections(stations) {
 }
 
 async function loadData() {
-  const [placesRes, stationsRes] = await Promise.all([
+  const [placesRes, stationsRes, blockReachabilityRes] = await Promise.all([
     fetch('data/places.json'),
     fetch('data/stations.json'),
+    fetch('data/blockReachability.json'),
   ]);
   const placesJson = await placesRes.json();
   const stationsJson = await stationsRes.json();
+  const blockReachability = await blockReachabilityRes.json();
   const places = placesJson.places;
   const stations = stationsJson.nodes;
 
@@ -65,6 +67,7 @@ async function loadData() {
     placesById: new Map(places.map(p => [p.id, p])),
     stationsById: new Map(stations.map(s => [s.id, s])),
     spatialIndex: Movement.buildSpatialIndex(places, stations),
+    blockReachability,
   };
 }
 

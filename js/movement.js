@@ -78,21 +78,118 @@ function getNearbyNodes(currentLat, currentLng, radiusKm, spatialIndex, excludeI
   return results;
 }
 
-// 到達可能性判定(§3.3 / §7.4)。
-// 初期プロトタイプでは直線距離の増減による簡易判定を用いる。
-// 将来 blockReachability.json のブロック隣接テーブル参照に差し替え可能なよう、
-// 引数・戻り値のインターフェースをここに固定しておく。
-function isReachableToward(fromNode, toNode, destinationNode) {
-  const before = haversineKm(fromNode.lat, fromNode.lng, destinationNode.lat, destinationNode.lng);
-  const after = haversineKm(toNode.lat, toNode.lng, destinationNode.lat, destinationNode.lng);
-  return after < before;
+// --- 到達可能性判定 本実装(§3.3 / §7.4のPhase2) -------------------------
+//
+// §7.4では初期プロトタイプとして「直線距離の増減」による簡易判定を認めていたが、
+// 分岐駅では直線距離が実際の経路と逆の増減を示すことがあり、往復振動の原因になる
+// (デモ版で実際に発生: 松山↔高松方面、鹿児島↔那覇 等)。
+// そのためPhase2では、目的地からの実グラフ最短距離(Dijkstra)を優先的に使い、
+// 直線距離判定は「対象ノードがグラフに存在しない/接続していない」場合のみの
+// 最終フォールバックに格下げする。blockReachability.json のブロック隣接は、
+// 将来地点数が数万件規模に拡大しグラフ全体のDijkstraが重くなった場合の
+// 中間フォールバックとして接続してある(現状の規模では出番はほぼ無い想定)。
+
+// 目的地(destinationId)を始点に、交通ノードグラフ全体への最短距離(km)を
+// Dijkstra法で一括計算する。ゲーム開始時・目的地確定時に一度だけ呼び出す想定
+// (§3.3「実行時の経路探索を軽量化するためのキャッシュ」の本実装)。
+function buildGraphDistances(destinationId, stationsById) {
+  const dist = new Map([[destinationId, 0]]);
+  const visited = new Set();
+  const frontier = new Set([destinationId]);
+
+  while (frontier.size > 0) {
+    let currentId = null;
+    let currentDist = Infinity;
+    for (const id of frontier) {
+      const d = dist.get(id);
+      if (d < currentDist) { currentDist = d; currentId = id; }
+    }
+    frontier.delete(currentId);
+    if (visited.has(currentId)) continue;
+    visited.add(currentId);
+
+    const node = stationsById.get(currentId);
+    if (!node) continue;
+    for (const conn of node.connections || []) {
+      if (visited.has(conn.toId)) continue;
+      const neighbor = stationsById.get(conn.toId);
+      if (!neighbor) continue;
+      const edgeDist = haversineKm(node.lat, node.lng, neighbor.lat, neighbor.lng);
+      const candidateDist = currentDist + edgeDist;
+      if (candidateDist < (dist.has(conn.toId) ? dist.get(conn.toId) : Infinity)) {
+        dist.set(conn.toId, candidateDist);
+        frontier.add(conn.toId);
+      }
+    }
+  }
+  return dist;
 }
 
-function progressScore(fromNode, toNode, destinationNode) {
+// blockReachability.json は0.5度グリッドでブロック分割されている(§3.3)。
+// §6.3の空間インデックス用gridKey(0.1度)とは別物なので関数を分けておく。
+function blockKeyOf(lat, lng, blockSizeDeg = 0.5) {
+  const bx = Math.floor((lat + 1e-9) / blockSizeDeg) * blockSizeDeg;
+  const by = Math.floor((lng + 1e-9) / blockSizeDeg) * blockSizeDeg;
+  return `${bx.toFixed(1)}_${by.toFixed(1)}`;
+}
+
+// 目的地ブロックを始点に、blockReachability.json上の隣接ブロックをBFSして
+// 各ブロックへの最短ホップ数を求める(グラフのDijkstraが使えない場合の中間フォールバック)。
+function buildBlockDistances(destinationBlockKey, blockReachability) {
+  const blocks = (blockReachability && blockReachability.blocks) || {};
+  const dist = new Map([[destinationBlockKey, 0]]);
+  const queue = [destinationBlockKey];
+  for (let head = 0; head < queue.length; head++) {
+    const current = queue[head];
+    const currentDist = dist.get(current);
+    const neighbors = (blocks[current] && blocks[current].neighbors) || [];
+    for (const n of neighbors) {
+      if (!dist.has(n)) {
+        dist.set(n, currentDist + 1);
+        queue.push(n);
+      }
+    }
+  }
+  return dist;
+}
+
+function graphProgress(fromId, toId, graphDistances) {
+  if (!graphDistances) return null;
+  const before = graphDistances.get(fromId);
+  const after = graphDistances.get(toId);
+  if (before === undefined || after === undefined || before === 0) return null;
+  return (before - after) / before;
+}
+
+function blockProgress(fromNode, toNode, blockDistances) {
+  if (!blockDistances) return null;
+  const before = blockDistances.get(blockKeyOf(fromNode.lat, fromNode.lng));
+  const after = blockDistances.get(blockKeyOf(toNode.lat, toNode.lng));
+  if (before === undefined || after === undefined || before === 0) return null;
+  return (before - after) / before;
+}
+
+function straightLineProgress(fromNode, toNode, destinationNode) {
   const before = haversineKm(fromNode.lat, fromNode.lng, destinationNode.lat, destinationNode.lng);
   if (before === 0) return 0;
   const after = haversineKm(toNode.lat, toNode.lng, destinationNode.lat, destinationNode.lng);
   return (before - after) / before;
+}
+
+// 進行方向スコアの本体。reachability = { graphDistances, blockDistances } を
+// game.js からゲーム開始時に一度だけ渡す想定(§3.3参照)。
+function progressScore(fromNode, toNode, destinationNode, reachability) {
+  const g = reachability && graphProgress(fromNode.id, toNode.id, reachability.graphDistances);
+  if (g !== null && g !== undefined) return g;
+  const b = reachability && blockProgress(fromNode, toNode, reachability.blockDistances);
+  if (b !== null && b !== undefined) return b;
+  return straightLineProgress(fromNode, toNode, destinationNode);
+}
+
+// 到達可能性判定(§3.3 / §7.4)。上記progressScoreの符号で判定する
+// (プラス=目的地に近づく)。関数インターフェースは仕様書指定のまま維持している。
+function isReachableToward(fromNode, toNode, destinationNode, reachability) {
+  return progressScore(fromNode, toNode, destinationNode, reachability) > 0;
 }
 
 function transportScoreOf(targetNode, stationsById) {
@@ -188,9 +285,9 @@ function generateCandidates(ctx) {
 
   // --- 交通機関候補(鉄道・飛行機・船・ヒッチハイク) ---
   // 通常は目的地への方向性を維持する接続のみを候補にする(§6.1)。
-  // ただし直線距離ベースの簡易到達可能性判定(§7.4)はグラフの分岐点で
-  // 「進行方向を保つ接続が1つもない」誤判定を起こし得るため、その場合に限り
-  // 方向性フィルタを外して候補を出す救済策を設ける(でないとプレイヤーが詰む)。
+  // Phase2: 到達可能性判定はctx.reachability(グラフ最短距離/ブロック隣接)を
+  // 優先して使う(上記のprogressScore参照)。データが不整合等でreachabilityが
+  // 全く使えない場合の直線距離フォールバックに備え、なお救済策も残しておく。
   function buildTransportCandidates(enforceProgressFilter) {
     const result = [];
     if (currentNode._type !== 'transport') return result;
@@ -198,9 +295,9 @@ function generateCandidates(ctx) {
     for (const conn of connections) {
       const toNode = stationsById.get(conn.toId);
       if (!toNode) continue;
-      if (enforceProgressFilter && !isReachableToward(currentNode, toNode, destinationNode)) continue;
+      if (enforceProgressFilter && !isReachableToward(currentNode, toNode, destinationNode, ctx.reachability)) continue;
 
-      const progress = progressScore(currentNode, toNode, destinationNode);
+      const progress = progressScore(currentNode, toNode, destinationNode, ctx.reachability);
       const transportScoreVal = transportScoreOf({ _type: 'transport', connections: toNode.connections }, stationsById);
       const discovery = effectiveDiscovery(toNode);
       const distanceKm = haversineKm(currentNode.lat, currentNode.lng, toNode.lat, toNode.lng);
@@ -284,6 +381,9 @@ window.Movement = {
   progressScore,
   candidateScore,
   generateCandidates,
+  buildGraphDistances,
+  blockKeyOf,
+  buildBlockDistances,
   WALK_RADIUS_KM_DEFAULT,
   WALK_RADIUS_KM_LOW_STAT,
 };

@@ -489,13 +489,41 @@ def write_outputs(places, stations, edges, out_dir):
     print(f'書き出し完了: {out_dir}/ (places={len(places)}, stations={len(stations)}, edges={len(edges)})')
 
 
+def regenerate_block_reachability_only(data_dir, out_dir):
+    """Overpass/Wikipediaに触れず、既存のplaces.json/stations.jsonの座標だけから
+    blockReachability.json を再生成する(ネットワーク不要。Phase2で追加)。"""
+    data_dir = Path(data_dir)
+    places = json.loads((data_dir / 'places.json').read_text(encoding='utf-8'))['places']
+    stations = json.loads((data_dir / 'stations.json').read_text(encoding='utf-8'))['nodes']
+    all_latlngs = [(p['lat'], p['lng']) for p in places] + [(s['lat'], s['lng']) for s in stations]
+
+    block_reach = generate_block_reachability(all_latlngs)
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / 'blockReachability.json').write_text(
+        json.dumps(block_reach, ensure_ascii=False, indent=2), encoding='utf-8',
+    )
+    block_count = len(block_reach['blocks'])
+    print(f'blockReachability.json を再生成しました: {out_dir}/blockReachability.json '
+          f'(地点{len(places)}件+ノード{len(stations)}件 → {block_count}ブロック)')
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('--regions', default='', help='カンマ区切りの地方名(REGION_BBOXESのキー)。"all"で全地方')
     parser.add_argument('--out', default='data', help='出力先ディレクトリ')
     parser.add_argument('--cache-dir', default=str(DEFAULT_CACHE_DIR), help='Overpass/Wikipediaレスポンスのキャッシュ先')
     parser.add_argument('--seed', type=int, default=42, help='discoveryScoreのランダム補正用シード(再現性確保)')
+    parser.add_argument('--blocks-only', action='store_true',
+                         help='Overpass/Wikipediaを呼ばず、--data(デフォルト--outと同じ)の既存'
+                              'places.json/stations.jsonからblockReachability.jsonだけを再生成する'
+                              '(ネットワーク不要)')
+    parser.add_argument('--data', default=None, help='--blocks-only時の読み込み元(デフォルトは--outと同じ)')
     args = parser.parse_args()
+
+    if args.blocks_only:
+        regenerate_block_reachability_only(args.data or args.out, args.out)
+        return
 
     if not args.regions:
         print('--regions が指定されていません。実行例:')

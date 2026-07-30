@@ -20,8 +20,9 @@ const RANDOM_EVENTS = [
 ];
 
 const Game = {
-  data: null, // { places, stations, placesById, stationsById, spatialIndex }
+  data: null, // { places, stations, placesById, stationsById, spatialIndex, blockReachability }
   state: null,
+  reachability: null, // { graphDistances, blockDistances } — 目的地確定時に一度だけ計算(Phase2)
 
   init(data) {
     this.data = data;
@@ -34,6 +35,17 @@ const Game = {
 
   destinationNode() {
     return this.data.stationsById.get(this.state.destinationId);
+  },
+
+  // 目的地からの実グラフ最短距離(Dijkstra)とブロック隣接BFSを一度だけ計算し、
+  // 以後の候補生成(移動のたび)で使い回す(§3.3のキャッシュ思想を実装)。
+  buildReachability(destinationId) {
+    const destNode = this.data.stationsById.get(destinationId);
+    const graphDistances = Movement.buildGraphDistances(destinationId, this.data.stationsById);
+    const blockDistances = destNode
+      ? Movement.buildBlockDistances(Movement.blockKeyOf(destNode.lat, destNode.lng), this.data.blockReachability)
+      : null;
+    this.reachability = { graphDistances, blockDistances };
   },
 
   newGame() {
@@ -60,6 +72,7 @@ const Game = {
       workedIds: [],
       arrived: false,
     };
+    this.buildReachability(destinationId);
     this.onArrive(startId, 'transport');
     Save.write(this.state);
     return this.state;
@@ -82,6 +95,7 @@ const Game = {
       workedIds: saved.workedIds || [],
       arrived: false,
     };
+    this.buildReachability(saved.destinationId);
     return this.state;
   },
 
@@ -125,6 +139,7 @@ const Game = {
       recentNodeIds,
       forceUnfilteredTransport,
       bannedTarget,
+      reachability: this.reachability,
     });
   },
 
