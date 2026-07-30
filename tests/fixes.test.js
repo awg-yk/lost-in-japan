@@ -3,7 +3,7 @@
 // ユーザーからの指示それぞれについて、直接・決定論的に検証する回帰テスト。
 //   ① 選択肢は3x3=9マス以内に収まる(UIが地図を覆い隠さない前提の担保)
 //   ② 空腹・体力のどちらかが0のときはアルバイト不可
-//   ③ アルバイトは同一ノードにつき最大3回まで
+//   ③ アルバイトは同一ノードにつき最大1回まで(2026-07-30: 観光名所の総数増加に伴い3回→1回)
 //   ④ アルバイトができるのは観光名所(地点データ)のみ。駅・空港・港では働けない
 'use strict';
 
@@ -79,7 +79,7 @@ test('fix2: eating and resting stay available at 0 gauges (only work is blocked)
   assert.equal(Game.rest().ok, true, 'rest() should still work so the player can recover');
 });
 
-test('fix3: work is capped at 3 times at the same sightseeing place', () => {
+test('fix3: work is capped at 1 time at the same sightseeing place', () => {
   const sandbox = freshGame();
   const { Game } = sandbox;
   teleportToPlace(sandbox);
@@ -87,11 +87,11 @@ test('fix3: work is capped at 3 times at the same sightseeing place', () => {
   Game.state.stamina = 100;
 
   const results = [];
-  for (let i = 0; i < 5; i++) results.push(Game.work());
+  for (let i = 0; i < 3; i++) results.push(Game.work());
 
-  assert.deepEqual(results.map(r => r.ok), [true, true, true, false, false],
-    'only the first 3 work attempts at the same place should succeed');
-  assert.equal(Game.canWork(), false, 'canWork() must be false after 3 successful work attempts');
+  assert.deepEqual(results.map(r => r.ok), [true, false, false],
+    'only the first work attempt at the same place should succeed');
+  assert.equal(Game.canWork(), false, 'canWork() must be false after 1 successful work attempt');
 });
 
 test('fix3: work count resets for a different place (limit is per-node, not global)', () => {
@@ -101,10 +101,10 @@ test('fix3: work count resets for a different place (limit is per-node, not glob
   teleportToPlace(sandbox, placeIds[0]);
   Game.state.hunger = 100;
   Game.state.stamina = 100;
-  Game.work(); Game.work(); Game.work();
+  Game.work();
   assert.equal(Game.canWork(), false, 'maxed out at the starting place');
 
-  // 「同一ノードにつき3回」であって「合計3回」ではないことをピンポイントで確認する。
+  // 「同一ノードにつき1回」であって「合計1回」ではないことをピンポイントで確認する。
   teleportToPlace(sandbox, placeIds[1]);
   assert.equal(Game.canWork(), true, 'a fresh place should allow working again');
   assert.equal(Game.work().ok, true);
