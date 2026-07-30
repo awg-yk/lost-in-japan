@@ -31,6 +31,7 @@ const Save = {
       stamina: state.stamina,
       totalDistanceKm: state.totalDistanceKm,
       workedIds: state.workedIds,
+      hitchhikeLocked: state.hitchhikeLocked,
       startId: state.startId,
     };
     try {

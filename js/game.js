@@ -86,6 +86,7 @@ const Game = {
       playTimeSec: 0,
       totalDistanceKm: 0,
       workedIds: [],
+      hitchhikeLocked: false,
       arrived: false,
     };
     this.buildReachability(destinationId);
@@ -111,6 +112,7 @@ const Game = {
       playTimeSec: saved.playTimeSec || 0,
       totalDistanceKm: saved.totalDistanceKm || 0,
       workedIds: saved.workedIds || [],
+      hitchhikeLocked: saved.hitchhikeLocked || false,
       arrived: false,
     };
     this.buildReachability(saved.destinationId);
@@ -144,7 +146,7 @@ const Game = {
     // 強制的に別の選択肢を取らせて往復ループを断ち切る。
     const bannedTarget = revisitCount >= 3 && recentNodeIds[0] ? recentNodeIds[0] : null;
 
-    return Movement.generateCandidates({
+    const baseCtx = {
       currentNode: { ...this.currentNode(), _type: this.state.currentNodeType },
       destinationNode: this.destinationNode(),
       money: this.state.money,
@@ -158,7 +160,19 @@ const Game = {
       forceUnfilteredTransport,
       bannedTarget,
       reachability: this.reachability,
-    });
+    };
+
+    const candidates = Movement.generateCandidates({ ...baseCtx, hitchhikeLocked: this.state.hitchhikeLocked });
+
+    // 詰み回避の最終手段: ヒッチハイクがロックされていて、かつ他に取れる行動が
+    // 本当に何も無い(移動候補0件・アルバイトも不可)場合のみ、ロックを一時的に
+    // 無視してヒッチハイクを候補に戻す。「アルバイトする」というmovement.js側が
+    // 知らない選択肢の有無を踏まえた判断のため、ここ(game.js)で行う。
+    if (candidates.length === 0 && this.state.hitchhikeLocked && !this.canWork()) {
+      return Movement.generateCandidates({ ...baseCtx, hitchhikeLocked: false });
+    }
+
+    return candidates;
   },
 
   // 移動候補を確定させる。戻り値: { ok, message, arrived }
@@ -172,13 +186,20 @@ const Game = {
       if (!success) {
         s.hunger = Math.max(0, s.hunger - HITCHHIKE_FAIL_HUNGER_COST);
         s.stamina = Math.max(0, s.stamina - HITCHHIKE_FAIL_STAMINA_COST);
+        // §実装時の裁量: ヒッチハイクが強すぎるとのフィードバックを受け、
+        // 失敗した場合は別の選択肢を選ぶまでヒッチハイクを候補から除外する。
+        s.hitchhikeLocked = true;
         Save.write(s);
-        return { ok: false, message: 'ヒッチハイクは失敗した…足止めをくらった。', arrived: false };
+        return { ok: false, message: 'ヒッチハイクは失敗した…足止めをくらった。(他の方法を試すまでヒッチハイクはできない)', arrived: false };
       }
     } else if (candidate.cost > 0) {
       if (s.money < candidate.cost) return { ok: false, message: '所持金が足りません。', arrived: false };
       s.money -= candidate.cost;
     }
+
+    // ヒッチハイク以外の選択肢(徒歩・有料交通機関・成功したヒッチハイク)を
+    // 選んだので、失敗によるロックを解除する。
+    s.hitchhikeLocked = false;
 
     // 空腹は移動手段によらず(移動時間の目安として)減少するが、
     // 体力は徒歩による身体的消耗としてのみ減少する。
@@ -247,6 +268,12 @@ const Game = {
     return s.currentNodeType === 'transport' && !s.workedIds.includes(s.currentNodeId);
   },
 
+  // 候補リストに「アルバイトする」を出す際、選ぶ前に稼げる金額・消耗を見せるためのプレビュー。
+  workPreview() {
+    const node = this.currentNode();
+    return { wage: workWage(node), hungerCost: WORK_HUNGER_COST, staminaCost: WORK_STAMINA_COST };
+  },
+
   work() {
     if (!this.canWork()) return { ok: false, message: 'ここでは既に働いたか、働ける場所ではありません。' };
     const node = this.currentNode();
@@ -255,8 +282,10 @@ const Game = {
     this.state.workedIds.push(this.state.currentNodeId);
     this.state.hunger = Math.max(0, this.state.hunger - WORK_HUNGER_COST);
     this.state.stamina = Math.max(0, this.state.stamina - WORK_STAMINA_COST);
+    // アルバイトも「別の選択肢」の一つなので、ヒッチハイク失敗ロックを解除する。
+    this.state.hitchhikeLocked = false;
     Save.write(this.state);
-    return { ok: true, message: `${node.name}でアルバイトして ¥${wage.toLocaleString()} 稼いだ。` };
+    return { ok: true, message: `${node.name}でアルバイトして ¥${wage.toLocaleString()} 稼いだ(体力 -${WORK_STAMINA_COST} ・ 空腹 -${WORK_HUNGER_COST})。` };
   },
 
   tickPlayTime() {

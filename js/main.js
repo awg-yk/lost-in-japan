@@ -83,15 +83,6 @@ function renderHud() {
   document.getElementById('stat-time').textContent = fmtTime(s.playTimeSec);
   document.getElementById('gauge-hunger').style.width = s.hunger + '%';
   document.getElementById('gauge-stamina').style.width = s.stamina + '%';
-  updateWorkButton();
-}
-
-function updateWorkButton() {
-  const btn = document.getElementById('btn-work');
-  if (!Game.state) return;
-  const already = Game.state.currentNodeType === 'transport' && Game.state.workedIds.includes(Game.state.currentNodeId);
-  btn.disabled = !Game.canWork();
-  btn.textContent = already ? '勤務済み' : 'アルバイト';
 }
 
 function candidateMetaText(c) {
@@ -116,15 +107,36 @@ function candidatePreviewText(c) {
   return `空腹 ${fmt(hungerLoss)} ・ 体力 ${fmt(staminaLoss)}`;
 }
 
+function buildWorkCard() {
+  const preview = Game.workPreview();
+  const card = document.createElement('button');
+  card.className = 'candidate-card';
+  card.innerHTML = `
+    <div class="candidate-cost earn">+${fmtMoney(preview.wage)}</div>
+    <div class="candidate-icon">💼</div>
+    <div class="candidate-body">
+      <div class="candidate-name">アルバイトする</div>
+      <div class="candidate-meta">その場で働いて稼ぐ</div>
+      <div class="candidate-preview">空腹 -${preview.hungerCost} ・ 体力 -${preview.staminaCost}</div>
+    </div>
+  `;
+  card.addEventListener('click', onWork);
+  return card;
+}
+
 function renderCandidates() {
   const list = document.getElementById('candidate-list');
   list.innerHTML = '';
   const candidates = Game.getCandidates();
+  const canWork = Game.canWork();
 
-  if (candidates.length === 0) {
+  if (candidates.length === 0 && !canWork) {
     list.innerHTML = '<div class="candidate-meta">近くに移動できる場所が見つかりません。食事・休憩をしてから、再度お試しください。</div>';
     return;
   }
+
+  // アルバイトは「移動」ではなく「その場での行動」なので、選択肢の先頭に別枠で出す。
+  if (canWork) list.appendChild(buildWorkCard());
 
   candidates.forEach(c => {
     const card = document.createElement('button');
@@ -142,6 +154,13 @@ function renderCandidates() {
     card.addEventListener('click', () => onChooseCandidate(c));
     list.appendChild(card);
   });
+}
+
+function onWork() {
+  const result = Game.work();
+  toast(result.message);
+  renderHud();
+  renderCandidates();
 }
 
 function onChooseCandidate(candidate) {
@@ -234,12 +253,6 @@ function setupHudActions() {
   });
   document.getElementById('btn-rest').addEventListener('click', () => {
     const r = Game.rest();
-    toast(r.message);
-    renderHud();
-    if (r.ok) renderCandidates();
-  });
-  document.getElementById('btn-work').addEventListener('click', () => {
-    const r = Game.work();
     toast(r.message);
     renderHud();
     if (r.ok) renderCandidates();

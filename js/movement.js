@@ -292,7 +292,7 @@ function generateCandidates(ctx) {
   // Phase2: 到達可能性判定はctx.reachability(グラフ最短距離/ブロック隣接)を
   // 優先して使う(上記のprogressScore参照)。データが不整合等でreachabilityが
   // 全く使えない場合の直線距離フォールバックに備え、なお救済策も残しておく。
-  function buildTransportCandidates(enforceProgressFilter) {
+  function buildTransportCandidates(enforceProgressFilter, allowHitchhike) {
     const result = [];
     if (currentNode._type !== 'transport') return result;
     const connections = currentNode.connections || [];
@@ -329,7 +329,9 @@ function generateCandidates(ctx) {
       // 進行度は progress * successRate になる。これをスコアに反映しないと、
       // 無料・高成功率のヒッチハイクが常に有料交通機関を上回ってしまい
       // (シミュレーションで実際に確認)、所持金を使う理由が無くなってしまう。
-      if (!flightOnly) {
+      // また、直前にヒッチハイクが失敗した場合は allowHitchhike=false になり、
+      // 別の選択肢を選ぶまで候補からヒッチハイクを一切外す(強すぎる、との要望)。
+      if (!flightOnly && allowHitchhike) {
         const isFerry = conn.requiresTransport.includes('ferry');
         const baseRate = isFerry ? HITCHHIKE_BASE_RATE_FERRY : HITCHHIKE_BASE_RATE_LAND;
         const successRate = Math.max(0.05, baseRate - (lowStat ? HITCHHIKE_LOW_STAT_PENALTY : 0));
@@ -357,9 +359,10 @@ function generateCandidates(ctx) {
   // 「進行方向を保つ接続が無い」と誤判定し、同じ地点を往復し続けてしまう場合の
   // 救済として、その状況を検知した呼び出し元(game.js)からの合図で
   // フィルタなしの全接続を候補にする(§7.1.1の詰み防止の趣旨に沿った措置)。
-  let transportCandidates = buildTransportCandidates(true);
+  const allowHitchhike = !ctx.hitchhikeLocked;
+  let transportCandidates = buildTransportCandidates(true, allowHitchhike);
   if (transportCandidates.length === 0 || ctx.forceUnfilteredTransport) {
-    transportCandidates = buildTransportCandidates(false);
+    transportCandidates = buildTransportCandidates(false, allowHitchhike);
   }
   candidates.push(...transportCandidates);
 
@@ -375,6 +378,10 @@ function generateCandidates(ctx) {
     const filtered = candidates.filter(c => !(c.targetId === ctx.bannedTarget.id && c.targetType === ctx.bannedTarget.type));
     if (filtered.length > 0) finalCandidates = filtered;
   }
+
+  // ヒッチハイクロックにより候補が0件になり得る場合の詰み回避は、ここでは行わない。
+  // movement.jsは「アルバイトする」等の非移動アクションの存在を知らないため、
+  // 本当に他に取れる行動が無いかどうかの判断はgame.js側(Game.getCandidates)に委ねる。
 
   finalCandidates.sort((a, b) => b.score - a.score);
   return finalCandidates.slice(0, MAX_CANDIDATES);
