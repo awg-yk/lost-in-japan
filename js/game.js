@@ -1,6 +1,13 @@
 // game.js — ゲーム状態管理(所持金・空腹・体力・発見済み等)(§4,§7,§8)
 
-const INITIAL_MONEY = 5000;
+// 難易度プリセット。所持金と「ラッキー度」(ヒッチハイク成功率・ランダムイベント
+// 発生頻度への補正)が変わる。難易度はゲーム開始時に選び、以後の全ての判定で使う。
+const DIFFICULTY_PRESETS = {
+  easy: { label: 'EASY', initialMoney: 8000, hitchhikeLuckBonus: 0.15, eventChanceMultiplier: 1.3 },
+  normal: { label: 'NORMAL', initialMoney: 5000, hitchhikeLuckBonus: 0, eventChanceMultiplier: 1.0 },
+  hard: { label: 'HARD', initialMoney: 3000, hitchhikeLuckBonus: -0.15, eventChanceMultiplier: 0.7 },
+};
+
 // 空腹は移動時間の目安として全ての移動手段で減少する。
 // 体力は「歩いた」ことによる身体的消耗のみで減少する(電車や飛行機に乗っている間は消耗しない)。
 const HUNGER_DECAY_PER_KM = 0.06;
@@ -13,12 +20,12 @@ const EAT_HUNGER_GAIN = 45;
 const REST_COST = 150;
 const REST_STAMINA_GAIN = 45;
 
-// アルバイト: 交通ノード(駅・空港・港)でのみ、同一ノードにつき1回だけ働ける。
+// アルバイト: 交通ノード(駅・空港・港)でのみ働ける。旅の資金稼ぎの手段として
+// 同一ノードでも繰り返し働けるようにしてある(§実装時の裁量。空腹・体力の消耗が
+// 自然な歯止めになるため、eat/restと組み合わせた「その場で稼ぐ」プレイを許容する)。
+const WORK_WAGE = 1000;
 const WORK_HUNGER_COST = 8;
 const WORK_STAMINA_COST = 15;
-function workWage(node) {
-  return 300 + Math.round((node.discoveryScore || 0) * 3);
-}
 
 const RANDOM_EVENT_CHANCE = 0.25;
 // Phase3: §7.3の例(お金を拾う/地域グルメ/珍しい発見/地元イベント/ヒッチハイク成功)
@@ -64,7 +71,12 @@ const Game = {
     this.reachability = { graphDistances, blockDistances };
   },
 
-  newGame() {
+  difficultyPreset() {
+    return DIFFICULTY_PRESETS[this.state && this.state.difficulty] || DIFFICULTY_PRESETS.normal;
+  },
+
+  newGame(difficulty) {
+    const preset = DIFFICULTY_PRESETS[difficulty] || DIFFICULTY_PRESETS.normal;
     const stationIds = [...this.data.stationsById.keys()];
     const startId = stationIds[Math.floor(Math.random() * stationIds.length)];
     let destinationId = startId;
@@ -73,11 +85,12 @@ const Game = {
     }
 
     this.state = {
+      difficulty: DIFFICULTY_PRESETS[difficulty] ? difficulty : 'normal',
       currentNodeId: startId,
       currentNodeType: 'transport',
       startId,
       destinationId,
-      money: INITIAL_MONEY,
+      money: preset.initialMoney,
       hunger: 100,
       stamina: 100,
       visitedIds: [],
@@ -92,30 +105,6 @@ const Game = {
     this.buildReachability(destinationId);
     this.onArrive(startId, 'transport');
     Save.write(this.state);
-    return this.state;
-  },
-
-  loadFromSave(saved) {
-    this.state = {
-      currentNodeId: saved.currentPlaceId,
-      currentNodeType: saved.currentPlaceType,
-      startId: saved.startId,
-      destinationId: saved.destinationId,
-      money: saved.money,
-      hunger: saved.hunger,
-      // stamina は旧バージョンの thirst を置き換えたフィールド。
-      // 旧セーブデータ(thirstのみ持つ)を読み込んだ場合のフォールバックを用意しておく。
-      stamina: saved.stamina !== undefined ? saved.stamina : (saved.thirst !== undefined ? saved.thirst : 100),
-      visitedIds: saved.visitedIds || [],
-      discoveredIds: saved.discoveredIds || [],
-      moveHistory: saved.moveHistory || [],
-      playTimeSec: saved.playTimeSec || 0,
-      totalDistanceKm: saved.totalDistanceKm || 0,
-      workedIds: saved.workedIds || [],
-      hitchhikeLocked: saved.hitchhikeLocked || false,
-      arrived: false,
-    };
-    this.buildReachability(saved.destinationId);
     return this.state;
   },
 
@@ -160,6 +149,7 @@ const Game = {
       forceUnfilteredTransport,
       bannedTarget,
       reachability: this.reachability,
+      hitchhikeLuckBonus: this.difficultyPreset().hitchhikeLuckBonus,
     };
 
     const candidates = Movement.generateCandidates({ ...baseCtx, hitchhikeLocked: this.state.hitchhikeLocked });
@@ -220,7 +210,7 @@ const Game = {
     this.onArrive(candidate.targetId, candidate.targetType);
 
     let eventMessage = null;
-    if (Math.random() < RANDOM_EVENT_CHANCE) {
+    if (Math.random() < RANDOM_EVENT_CHANCE * this.difficultyPreset().eventChanceMultiplier) {
       eventMessage = this.triggerRandomEvent();
     }
 
@@ -244,48 +234,56 @@ const Game = {
     return null;
   },
 
+  // 食事・アルバイトとも、現在地が交通ノード(駅・空港・港)であることを前提とする
+  // (§実装時の裁量: 本来は地点ごとの実際の飲食店・温泉データに応じるべきだが、
+  // 実データ整備前の暫定として、駅・空港であれば一律に利用できることにしている)。
+  atTransportNode() {
+    return this.state.currentNodeType === 'transport';
+  },
+
   eat() {
+    if (!this.atTransportNode()) return { ok: false, message: 'ここでは食事できません。' };
     if (this.state.money < EAT_COST) return { ok: false, message: '所持金が足りません。' };
     this.state.money -= EAT_COST;
     this.state.hunger = Math.min(100, this.state.hunger + EAT_HUNGER_GAIN);
+    this.state.hitchhikeLocked = false;
     Save.write(this.state);
     return { ok: true, message: `食事をとった(¥${EAT_COST})。` };
   },
 
   rest() {
+    if (!this.atTransportNode()) return { ok: false, message: 'ここでは温泉に入れません。' };
     if (this.state.money < REST_COST) return { ok: false, message: '所持金が足りません。' };
     this.state.money -= REST_COST;
     this.state.stamina = Math.min(100, this.state.stamina + REST_STAMINA_GAIN);
+    this.state.hitchhikeLocked = false;
     Save.write(this.state);
-    return { ok: true, message: `休憩して体力を回復した(¥${REST_COST})。` };
+    return { ok: true, message: `温泉に入って体力を回復した(¥${REST_COST})。` };
   },
 
-  // アルバイト: 現在地が交通ノード(駅・空港・港)で、かつそのノードでまだ
-  // 働いたことが無い場合のみ実行できる(§実装時の裁量: 稼ぐ手段が乏しいという
-  // フィードバックを受けて追加。同一ノードでの連続稼ぎを防ぐため1回限り)。
+  // アルバイト: 交通ノード(駅・空港・港)であれば何度でも働ける
+  // (§実装時の裁量: 「稼ぐ手段が乏しい」「その場で資金を貯めたい」という要望を受け、
+  // 一度きりの制限を撤廃した。空腹・体力の消耗が自然な歯止めになる)。
   canWork() {
-    const s = this.state;
-    return s.currentNodeType === 'transport' && !s.workedIds.includes(s.currentNodeId);
+    return this.atTransportNode();
   },
 
   // 候補リストに「アルバイトする」を出す際、選ぶ前に稼げる金額・消耗を見せるためのプレビュー。
   workPreview() {
-    const node = this.currentNode();
-    return { wage: workWage(node), hungerCost: WORK_HUNGER_COST, staminaCost: WORK_STAMINA_COST };
+    return { wage: WORK_WAGE, hungerCost: WORK_HUNGER_COST, staminaCost: WORK_STAMINA_COST };
   },
 
   work() {
-    if (!this.canWork()) return { ok: false, message: 'ここでは既に働いたか、働ける場所ではありません。' };
+    if (!this.canWork()) return { ok: false, message: 'ここでは働けません。' };
     const node = this.currentNode();
-    const wage = workWage(node);
-    this.state.money += wage;
-    this.state.workedIds.push(this.state.currentNodeId);
+    this.state.money += WORK_WAGE;
+    if (!this.state.workedIds.includes(this.state.currentNodeId)) this.state.workedIds.push(this.state.currentNodeId);
     this.state.hunger = Math.max(0, this.state.hunger - WORK_HUNGER_COST);
     this.state.stamina = Math.max(0, this.state.stamina - WORK_STAMINA_COST);
     // アルバイトも「別の選択肢」の一つなので、ヒッチハイク失敗ロックを解除する。
     this.state.hitchhikeLocked = false;
     Save.write(this.state);
-    return { ok: true, message: `${node.name}でアルバイトして ¥${wage.toLocaleString()} 稼いだ(体力 -${WORK_STAMINA_COST} ・ 空腹 -${WORK_HUNGER_COST})。` };
+    return { ok: true, message: `${node.name}でアルバイトして ¥${WORK_WAGE.toLocaleString()} 稼いだ(体力 -${WORK_STAMINA_COST} ・ 空腹 -${WORK_HUNGER_COST})。` };
   },
 
   tickPlayTime() {
@@ -312,6 +310,8 @@ const Game = {
 
 window.Game = Game;
 window.EAT_COST = EAT_COST;
+window.EAT_HUNGER_GAIN = EAT_HUNGER_GAIN;
 window.REST_COST = REST_COST;
+window.REST_STAMINA_GAIN = REST_STAMINA_GAIN;
 window.HUNGER_DECAY_PER_KM = HUNGER_DECAY_PER_KM;
 window.STAMINA_DECAY_PER_KM_WALK = STAMINA_DECAY_PER_KM_WALK;

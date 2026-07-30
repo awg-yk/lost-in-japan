@@ -334,7 +334,9 @@ function generateCandidates(ctx) {
       if (!flightOnly && allowHitchhike) {
         const isFerry = conn.requiresTransport.includes('ferry');
         const baseRate = isFerry ? HITCHHIKE_BASE_RATE_FERRY : HITCHHIKE_BASE_RATE_LAND;
-        const successRate = Math.max(0.05, baseRate - (lowStat ? HITCHHIKE_LOW_STAT_PENALTY : 0));
+        // 難易度の「ラッキー度」補正(EASYはプラス、HARDはマイナス)。§実装時の裁量。
+        const luckBonus = ctx.hitchhikeLuckBonus || 0;
+        const successRate = Math.min(0.95, Math.max(0.05, baseRate + luckBonus - (lowStat ? HITCHHIKE_LOW_STAT_PENALTY : 0)));
         const expectedProgress = progress * successRate;
         result.push({
           key: `hitchhike_${currentNode.id}_${toNode.id}`,

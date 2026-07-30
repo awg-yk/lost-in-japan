@@ -42,14 +42,6 @@ html, body{
 .gauge-fill.hunger{ background: var(--accent-hunger); }
 .gauge-fill.stamina{ background: var(--accent-stamina); }
 
-.hud-actions{ display:flex; gap:6px; margin-left:auto; flex-wrap:wrap; }
-.hud-btn{
-  border:1px solid var(--panel-border); background: rgba(255,255,255,0.06); color: var(--text-main);
-  border-radius:10px; padding:6px 10px; font-size:12px; white-space:nowrap;
-}
-.hud-btn:disabled{ opacity:0.4; }
-.hud-btn:active{ opacity:0.8; }
-
 /* Toast */
 #toast{
   position:absolute; left:50%; bottom:calc(46vh); transform:translateX(-50%);
@@ -120,6 +112,10 @@ button.primary{
   color:#fff; font-size:15px; font-weight:700; margin-top:10px; -webkit-tap-highlight-color:transparent;
 }
 button.primary:active{ opacity:0.85; }
+button.primary.difficulty{ display:flex; flex-direction:column; align-items:center; gap:4px; }
+button.primary.difficulty .difficulty-desc{ font-size:11px; font-weight:400; opacity:0.85; }
+#btn-easy{ background: var(--accent-green); }
+#btn-hard{ background: var(--accent-hunger); }
 button.secondary{
   width:100%; padding:12px; border:1px solid var(--panel-border); border-radius:12px;
   background:transparent; color:var(--text-sub); font-size:13px; margin-top:8px;

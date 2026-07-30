@@ -124,19 +124,58 @@ function buildWorkCard() {
   return card;
 }
 
+// 食事・温泉は、実際の地点ごとの飲食店/温泉データが無い暫定実装として、
+// 駅・空港であれば一律に利用できる候補として出す(§実装時の裁量)。
+function buildEatCard() {
+  const card = document.createElement('button');
+  card.className = 'candidate-card';
+  card.innerHTML = `
+    <div class="candidate-cost"><span class="cost-label">料金</span>${fmtMoney(window.EAT_COST)}</div>
+    <div class="candidate-icon">🍙</div>
+    <div class="candidate-body">
+      <div class="candidate-name">食事をとる</div>
+      <div class="candidate-meta">空腹を回復</div>
+      <div class="candidate-preview">空腹 +${window.EAT_HUNGER_GAIN}</div>
+    </div>
+  `;
+  card.addEventListener('click', onEat);
+  return card;
+}
+
+function buildRestCard() {
+  const card = document.createElement('button');
+  card.className = 'candidate-card';
+  card.innerHTML = `
+    <div class="candidate-cost"><span class="cost-label">料金</span>${fmtMoney(window.REST_COST)}</div>
+    <div class="candidate-icon">♨️</div>
+    <div class="candidate-body">
+      <div class="candidate-name">温泉に入る</div>
+      <div class="candidate-meta">体力を回復</div>
+      <div class="candidate-preview">体力 +${window.REST_STAMINA_GAIN}</div>
+    </div>
+  `;
+  card.addEventListener('click', onRest);
+  return card;
+}
+
 function renderCandidates() {
   const list = document.getElementById('candidate-list');
   list.innerHTML = '';
   const candidates = Game.getCandidates();
   const canWork = Game.canWork();
+  const atTransportNode = Game.atTransportNode();
+  const canEat = atTransportNode && Game.state.money >= window.EAT_COST;
+  const canRest = atTransportNode && Game.state.money >= window.REST_COST;
 
-  if (candidates.length === 0 && !canWork) {
-    list.innerHTML = '<div class="candidate-meta">近くに移動できる場所が見つかりません。食事・休憩をしてから、再度お試しください。</div>';
+  if (candidates.length === 0 && !canWork && !canEat && !canRest) {
+    list.innerHTML = '<div class="candidate-meta">近くに移動できる場所が見つかりません。</div>';
     return;
   }
 
-  // アルバイトは「移動」ではなく「その場での行動」なので、選択肢の先頭に別枠で出す。
+  // アルバイト・食事・温泉は「移動」ではなく「その場での行動」なので、選択肢の先頭に別枠で出す。
   if (canWork) list.appendChild(buildWorkCard());
+  if (canEat) list.appendChild(buildEatCard());
+  if (canRest) list.appendChild(buildRestCard());
 
   candidates.forEach(c => {
     const card = document.createElement('button');
@@ -158,6 +197,20 @@ function renderCandidates() {
 
 function onWork() {
   const result = Game.work();
+  toast(result.message);
+  renderHud();
+  renderCandidates();
+}
+
+function onEat() {
+  const result = Game.eat();
+  toast(result.message);
+  renderHud();
+  renderCandidates();
+}
+
+function onRest() {
+  const result = Game.rest();
   toast(result.message);
   renderHud();
   renderCandidates();
@@ -222,8 +275,8 @@ function renderNewGameOnMap() {
   });
 }
 
-function startNewGame() {
-  Game.newGame();
+function startNewGame(difficulty) {
+  Game.newGame(difficulty);
   MapView.clearRoute();
   MapView.visitedLayer.clearLayers();
   renderNewGameOnMap();
@@ -231,32 +284,6 @@ function startNewGame() {
   document.getElementById('candidate-panel').classList.remove('hidden');
   renderCandidates();
   toast(`旅の始まり: ${Game.currentNode().name} から ${Game.destinationNode().name} を目指します。`);
-}
-
-function continueGame(saved) {
-  Game.loadFromSave(saved);
-  MapView.clearRoute();
-  MapView.visitedLayer.clearLayers();
-  renderNewGameOnMap();
-  renderHud();
-  document.getElementById('candidate-panel').classList.remove('hidden');
-  renderCandidates();
-  toast('前回の続きから再開しました。');
-}
-
-function setupHudActions() {
-  document.getElementById('btn-eat').addEventListener('click', () => {
-    const r = Game.eat();
-    toast(r.message);
-    renderHud();
-    if (r.ok) renderCandidates();
-  });
-  document.getElementById('btn-rest').addEventListener('click', () => {
-    const r = Game.rest();
-    toast(r.message);
-    renderHud();
-    if (r.ok) renderCandidates();
-  });
 }
 
 function setupResetButton() {
@@ -271,7 +298,16 @@ function setupResetButton() {
 function setupPlayAgain() {
   document.getElementById('btn-play-again').addEventListener('click', () => {
     hideOverlay('overlay-result');
-    startNewGame();
+    showOverlay('overlay-title');
+  });
+}
+
+function setupDifficultyButtons() {
+  ['easy', 'normal', 'hard'].forEach((difficulty) => {
+    document.getElementById(`btn-${difficulty}`).addEventListener('click', () => {
+      hideOverlay('overlay-title');
+      startNewGame(difficulty);
+    });
   });
 }
 
@@ -293,24 +329,10 @@ async function init() {
   MapView.init();
   setLoading(false);
 
-  const saved = Save.load();
-  const hasValidSave = !!(saved && data.stationsById.has(saved.destinationId));
-
+  Save.clear();
   showOverlay('overlay-title');
-  document.getElementById('btn-continue').style.display = hasValidSave ? 'block' : 'none';
 
-  document.getElementById('btn-continue').addEventListener('click', () => {
-    hideOverlay('overlay-title');
-    continueGame(saved);
-  }, { once: true });
-
-  document.getElementById('btn-newgame').addEventListener('click', () => {
-    hideOverlay('overlay-title');
-    Save.clear();
-    startNewGame();
-  }, { once: true });
-
-  setupHudActions();
+  setupDifficultyButtons();
   setupResetButton();
   setupPlayAgain();
   setupIntervals();

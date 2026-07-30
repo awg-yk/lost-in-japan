@@ -34,10 +34,6 @@
       <span class="label">体力</span>
       <div class="gauge-wrap"><div class="gauge-bg"><div class="gauge-fill stamina" id="gauge-stamina" style="width:100%"></div></div></div>
     </div>
-    <div class="hud-actions">
-      <button class="hud-btn" id="btn-eat">食事 ¥300</button>
-      <button class="hud-btn" id="btn-rest">休憩 ¥150</button>
-    </div>
   </div>
 </div>
 
@@ -54,8 +50,16 @@
     <h2>Journey Home Japan</h2>
     <p>日本のどこかからスタートし、ランダムに選ばれた目的地(駅・空港・港)を目指す旅ゲームです。<br>
     最短距離ではなく、道中の知らない場所の発見に価値があります。</p>
-    <button class="primary" id="btn-continue">続きから</button>
-    <button class="primary" id="btn-newgame">はじめから</button>
+    <p>難易度を選んではじめてください。</p>
+    <button class="primary difficulty" id="btn-easy" data-difficulty="easy">
+      EASY<span class="difficulty-desc">所持金が多く、ヒッチハイクも運が良い</span>
+    </button>
+    <button class="primary difficulty" id="btn-normal" data-difficulty="normal">
+      NORMAL<span class="difficulty-desc">標準的な旅</span>
+    </button>
+    <button class="primary difficulty" id="btn-hard" data-difficulty="hard">
+      HARD<span class="difficulty-desc">所持金が少なく、ヒッチハイクも運が悪い</span>
+    </button>
   </div>
 </div>
 
