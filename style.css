@@ -44,7 +44,7 @@ html, body{
 
 /* Toast */
 #toast{
-  position:absolute; left:50%; bottom:calc(46vh); transform:translateX(-50%);
+  position:absolute; left:50%; bottom:calc(38vh); transform:translateX(-50%);
   z-index:1200; background: rgba(17,28,43,0.95); border:1px solid var(--panel-border);
   color:var(--text-main); padding:10px 18px; border-radius:10px; font-size:13px; max-width:86%;
   text-align:center; white-space:pre-line; box-shadow:0 6px 18px rgba(0,0,0,0.4);
@@ -52,35 +52,45 @@ html, body{
 }
 #toast.show{ opacity:1; }
 
-/* Candidate panel */
+/* Candidate panel
+   地図が見えなくなるのを防ぐため、選択肢は縦3×横3=9マスの固定グリッドで表示する。
+   候補が9個に満たない場合、余ったマスは単純に空白のまま(将来、交通機関以外の
+   選択肢を追加する余地として残してある)。 */
 #candidate-panel{
   position:absolute; left:0; right:0; bottom:0; z-index:900;
   background: var(--panel-bg); border-top:1px solid var(--panel-border);
-  border-radius: 18px 18px 0 0; padding: 12px 14px calc(12px + env(safe-area-inset-bottom,0px)) 14px;
-  box-shadow: 0 -8px 30px rgba(0,0,0,0.5); max-height:46vh; overflow-y:auto;
+  border-radius: 18px 18px 0 0; padding: 10px 12px calc(10px + env(safe-area-inset-bottom,0px)) 12px;
+  box-shadow: 0 -8px 30px rgba(0,0,0,0.5); max-height:38vh; overflow-y:auto;
 }
 #candidate-panel.hidden{ display:none; }
-#candidate-panel h3{ margin:0 0 8px 0; font-size:14px; color: var(--text-sub); font-weight:600; }
-#candidate-list{ display:flex; flex-direction:column; gap:8px; }
+#candidate-panel h3{ margin:0 0 6px 0; font-size:12px; color: var(--text-sub); font-weight:600; }
+#candidate-list{
+  display:grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(3, minmax(64px, 1fr));
+  gap:6px;
+}
 .candidate-card{
-  display:flex; align-items:center; gap:10px; width:100%; text-align:left;
-  background: rgba(255,255,255,0.05); border:1px solid var(--panel-border); border-radius:12px;
-  padding:10px 12px; color:var(--text-main);
+  display:flex; flex-direction:column; align-items:center; justify-content:center;
+  gap:2px; width:100%; text-align:center; overflow:hidden;
+  background: rgba(255,255,255,0.05); border:1px solid var(--panel-border); border-radius:10px;
+  padding:6px 4px; color:var(--text-main);
 }
 .candidate-card:active{ background: rgba(255,255,255,0.1); }
-.candidate-icon{ font-size:22px; width:28px; text-align:center; }
-.candidate-body{ flex:1; min-width:0; }
-.candidate-name{ font-size:14px; font-weight:700; display:flex; align-items:center; gap:6px; }
-.candidate-name .new-badge{ font-size:10px; background: var(--accent-green); color:#08120d; border-radius:6px; padding:1px 5px; font-weight:700; }
-.candidate-meta{ font-size:11px; color: var(--text-sub); margin-top:2px; }
+.candidate-icon{ font-size:18px; line-height:1; }
+.candidate-body{ width:100%; min-width:0; }
+.candidate-name{
+  font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:3px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.candidate-name .new-badge{ font-size:8px; background: var(--accent-green); color:#08120d; border-radius:5px; padding:1px 4px; font-weight:700; flex-shrink:0; }
+.candidate-meta{ font-size:9px; color: var(--text-sub); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .candidate-cost{
-  font-size:13px; font-weight:700; color: var(--accent-gold); white-space:nowrap;
-  text-align:left; display:flex; flex-direction:column; align-items:flex-start; gap:1px;
-  min-width:64px; flex-shrink:0;
+  font-size:11px; font-weight:700; color: var(--accent-gold); white-space:nowrap;
 }
 .candidate-cost.earn{ color: var(--accent-green); }
-.candidate-preview{ font-size:10px; color: var(--text-sub); margin-top:2px; }
-.candidate-cost .cost-label{ font-size:10px; font-weight:600; color: var(--text-sub); }
+.candidate-preview{ font-size:8px; color: var(--text-sub); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.candidate-cost .cost-label{ font-size:8px; font-weight:600; color: var(--text-sub); margin-right:2px; }
 
 .survival-actions{ display:flex; gap:8px; margin-top:10px; }
 .survival-actions button{
@@ -122,7 +132,7 @@ button.secondary{
 }
 
 #fab-reset{
-  position:absolute; right:12px; bottom: calc(48vh + 12px); z-index:1000;
+  position:absolute; right:12px; bottom: calc(38vh + 12px); z-index:1000;
   background: rgba(17,28,43,0.9); border:1px solid var(--panel-border); color:var(--text-sub);
   font-size:11px; padding:8px 12px; border-radius:20px;
 }

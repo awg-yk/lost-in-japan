@@ -116,7 +116,7 @@ function buildWorkCard() {
     <div class="candidate-icon">💼</div>
     <div class="candidate-body">
       <div class="candidate-name">アルバイトする</div>
-      <div class="candidate-meta">その場で働いて稼ぐ</div>
+      <div class="candidate-meta">ここであと${preview.remaining}回まで(全${preview.max}回)</div>
       <div class="candidate-preview">空腹 -${preview.hungerCost} ・ 体力 -${preview.staminaCost}</div>
     </div>
   `;

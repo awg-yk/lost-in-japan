@@ -21,11 +21,13 @@ const REST_COST = 150;
 const REST_STAMINA_GAIN = 45;
 
 // アルバイト: 交通ノード(駅・空港・港)でのみ働ける。旅の資金稼ぎの手段として
-// 同一ノードでも繰り返し働けるようにしてある(§実装時の裁量。空腹・体力の消耗が
-// 自然な歯止めになるため、eat/restと組み合わせた「その場で稼ぐ」プレイを許容する)。
+// 同一ノードでも繰り返し働けるようにしてあるが、無制限だと詰み回避に頼らず
+// 同じ場所で稼ぎ続けられてしまうため、同一ノードにつき最大3回までに制限する。
+// また、空腹・体力のどちらかが0の状態では働けない(力尽きた状態での労働を禁止)。
 const WORK_WAGE = 1000;
 const WORK_HUNGER_COST = 8;
 const WORK_STAMINA_COST = 15;
+const WORK_MAX_PER_NODE = 3;
 
 const RANDOM_EVENT_CHANCE = 0.25;
 // Phase3: §7.3の例(お金を拾う/地域グルメ/珍しい発見/地元イベント/ヒッチハイク成功)
@@ -261,23 +263,37 @@ const Game = {
     return { ok: true, message: `温泉に入って体力を回復した(¥${REST_COST})。` };
   },
 
-  // アルバイト: 交通ノード(駅・空港・港)であれば何度でも働ける
-  // (§実装時の裁量: 「稼ぐ手段が乏しい」「その場で資金を貯めたい」という要望を受け、
-  // 一度きりの制限を撤廃した。空腹・体力の消耗が自然な歯止めになる)。
+  // アルバイト: 交通ノード(駅・空港・港)であれば働けるが、以下の2条件で制限する。
+  //   - 空腹・体力のどちらかが0のときは働けない(力尽きた状態での労働を禁止)。
+  //   - 同一ノードでの労働回数はWORK_MAX_PER_NODE(3回)まで。
   canWork() {
-    return this.atTransportNode();
+    if (!this.atTransportNode()) return false;
+    if (this.state.hunger <= 0 || this.state.stamina <= 0) return false;
+    return this.workCountAtCurrentNode() < WORK_MAX_PER_NODE;
   },
 
-  // 候補リストに「アルバイトする」を出す際、選ぶ前に稼げる金額・消耗を見せるためのプレビュー。
+  // 現在地(交通ノード)で、これまでに何回アルバイトしたか。
+  workCountAtCurrentNode() {
+    const id = this.state.currentNodeId;
+    return this.state.workedIds.filter(workedId => workedId === id).length;
+  },
+
+  // 候補リストに「アルバイトする」を出す際、選ぶ前に稼げる金額・消耗・残り回数を見せるためのプレビュー。
   workPreview() {
-    return { wage: WORK_WAGE, hungerCost: WORK_HUNGER_COST, staminaCost: WORK_STAMINA_COST };
+    return {
+      wage: WORK_WAGE,
+      hungerCost: WORK_HUNGER_COST,
+      staminaCost: WORK_STAMINA_COST,
+      remaining: WORK_MAX_PER_NODE - this.workCountAtCurrentNode(),
+      max: WORK_MAX_PER_NODE,
+    };
   },
 
   work() {
     if (!this.canWork()) return { ok: false, message: 'ここでは働けません。' };
     const node = this.currentNode();
     this.state.money += WORK_WAGE;
-    if (!this.state.workedIds.includes(this.state.currentNodeId)) this.state.workedIds.push(this.state.currentNodeId);
+    this.state.workedIds.push(this.state.currentNodeId);
     this.state.hunger = Math.max(0, this.state.hunger - WORK_HUNGER_COST);
     this.state.stamina = Math.max(0, this.state.stamina - WORK_STAMINA_COST);
     // アルバイトも「別の選択肢」の一つなので、ヒッチハイク失敗ロックを解除する。
