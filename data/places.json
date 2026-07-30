@@ -33,6 +33,22 @@
       "nearestStationId": 3
     },
     {
+      "id": 103,
+      "name": "大通公園",
+      "type": "park",
+      "lat": 43.0609,
+      "lng": 141.3564,
+      "prefecture": "北海道",
+      "discoveryScore": 30,
+      "reward": 95,
+      "officialUrl": "",
+      "wikipediaUrl": "https://ja.wikipedia.org/wiki/大通公園",
+      "gridKey": "43.0_141.3",
+      "hasWikipedia": true,
+      "wikipediaLength": 5000,
+      "nearestStationId": 2
+    },
+    {
       "id": 104,
       "name": "小樽運河",
       "type": "scenic_spot",
@@ -65,6 +81,22 @@
       "nearestStationId": 6
     },
     {
+      "id": 106,
+      "name": "中尊寺",
+      "type": "world_heritage",
+      "lat": 39.0007,
+      "lng": 141.1046,
+      "prefecture": "岩手県",
+      "discoveryScore": 25,
+      "reward": 88,
+      "officialUrl": "",
+      "wikipediaUrl": "https://ja.wikipedia.org/wiki/中尊寺",
+      "gridKey": "39.0_141.1",
+      "hasWikipedia": true,
+      "wikipediaLength": 15000,
+      "nearestStationId": 5
+    },
+    {
       "id": 107,
       "name": "弘前城",
       "type": "castle",
@@ -79,6 +111,38 @@
       "hasWikipedia": true,
       "wikipediaLength": 8000,
       "nearestStationId": 4
+    },
+    {
+      "id": 108,
+      "name": "浅草寺",
+      "type": "temple",
+      "lat": 35.7148,
+      "lng": 139.7967,
+      "prefecture": "東京都",
+      "discoveryScore": 12,
+      "reward": 68,
+      "officialUrl": "",
+      "wikipediaUrl": "https://ja.wikipedia.org/wiki/浅草寺",
+      "gridKey": "35.7_139.7",
+      "hasWikipedia": true,
+      "wikipediaLength": 20000,
+      "nearestStationId": 7
+    },
+    {
+      "id": 109,
+      "name": "明治神宮",
+      "type": "shrine",
+      "lat": 35.6764,
+      "lng": 139.6993,
+      "prefecture": "東京都",
+      "discoveryScore": 15,
+      "reward": 73,
+      "officialUrl": "",
+      "wikipediaUrl": "https://ja.wikipedia.org/wiki/明治神宮",
+      "gridKey": "35.6_139.6",
+      "hasWikipedia": true,
+      "wikipediaLength": 14000,
+      "nearestStationId": 7
     },
     {
       "id": 110,
@@ -113,6 +177,38 @@
       "nearestStationId": 21
     },
     {
+      "id": 112,
+      "name": "トキの森公園",
+      "type": "park",
+      "lat": 38.0377,
+      "lng": 138.4219,
+      "prefecture": "新潟県",
+      "discoveryScore": 55,
+      "reward": 133,
+      "officialUrl": "",
+      "wikipediaUrl": "",
+      "gridKey": "38.0_138.4",
+      "hasWikipedia": false,
+      "wikipediaLength": 0,
+      "nearestStationId": 21
+    },
+    {
+      "id": 113,
+      "name": "兼六園",
+      "type": "park",
+      "lat": 36.562,
+      "lng": 136.6626,
+      "prefecture": "石川県",
+      "discoveryScore": 22,
+      "reward": 83,
+      "officialUrl": "",
+      "wikipediaUrl": "https://ja.wikipedia.org/wiki/兼六園",
+      "gridKey": "36.5_136.6",
+      "hasWikipedia": true,
+      "wikipediaLength": 9500,
+      "nearestStationId": 9
+    },
+    {
       "id": 114,
       "name": "白川郷",
       "type": "world_heritage",
@@ -145,6 +241,22 @@
       "nearestStationId": 8
     },
     {
+      "id": 116,
+      "name": "清水寺",
+      "type": "temple",
+      "lat": 34.9948,
+      "lng": 135.785,
+      "prefecture": "京都府",
+      "discoveryScore": 10,
+      "reward": 65,
+      "officialUrl": "",
+      "wikipediaUrl": "https://ja.wikipedia.org/wiki/清水寺",
+      "gridKey": "34.9_135.7",
+      "hasWikipedia": true,
+      "wikipediaLength": 22000,
+      "nearestStationId": 10
+    },
+    {
       "id": 117,
       "name": "伏見稲荷大社",
       "type": "shrine",
@@ -159,6 +271,22 @@
       "hasWikipedia": true,
       "wikipediaLength": 11000,
       "nearestStationId": 10
+    },
+    {
+      "id": 118,
+      "name": "大阪城",
+      "type": "castle",
+      "lat": 34.6873,
+      "lng": 135.5262,
+      "prefecture": "大阪府",
+      "discoveryScore": 15,
+      "reward": 73,
+      "officialUrl": "",
+      "wikipediaUrl": "https://ja.wikipedia.org/wiki/大阪城",
+      "gridKey": "34.6_135.5",
+      "hasWikipedia": true,
+      "wikipediaLength": 16000,
+      "nearestStationId": 11
     },
     {
       "id": 119,
@@ -191,6 +319,22 @@
       "hasWikipedia": true,
       "wikipediaLength": 18000,
       "nearestStationId": 12
+    },
+    {
+      "id": 121,
+      "name": "厳島神社",
+      "type": "world_heritage",
+      "lat": 34.296,
+      "lng": 132.3199,
+      "prefecture": "広島県",
+      "discoveryScore": 20,
+      "reward": 80,
+      "officialUrl": "",
+      "wikipediaUrl": "https://ja.wikipedia.org/wiki/厳島神社",
+      "gridKey": "34.2_132.3",
+      "hasWikipedia": true,
+      "wikipediaLength": 16000,
+      "nearestStationId": 13
     },
     {
       "id": 122,
@@ -271,6 +415,22 @@
       "hasWikipedia": false,
       "wikipediaLength": 0,
       "nearestStationId": 22
+    },
+    {
+      "id": 127,
+      "name": "首里城",
+      "type": "castle",
+      "lat": 26.217,
+      "lng": 127.7192,
+      "prefecture": "沖縄県",
+      "discoveryScore": 28,
+      "reward": 92,
+      "officialUrl": "",
+      "wikipediaUrl": "https://ja.wikipedia.org/wiki/首里城",
+      "gridKey": "26.2_127.7",
+      "hasWikipedia": true,
+      "wikipediaLength": 17000,
+      "nearestStationId": 19
     },
     {
       "id": 128,
@@ -383,6 +543,22 @@
       "hasWikipedia": true,
       "wikipediaLength": 7000,
       "nearestStationId": 25
+    },
+    {
+      "id": 135,
+      "name": "羽田イノベーションシティ",
+      "type": "famous_facility",
+      "lat": 35.548713,
+      "lng": 139.755328,
+      "prefecture": "東京都",
+      "discoveryScore": 41,
+      "reward": 112,
+      "officialUrl": "https://haneda-innovation-city.com/",
+      "wikipediaUrl": "https://ja.wikipedia.org/wiki/羽田イノベーションシティ",
+      "gridKey": "35.5_139.7",
+      "hasWikipedia": true,
+      "wikipediaLength": 4000,
+      "nearestStationId": 24
     }
   ]
 }
