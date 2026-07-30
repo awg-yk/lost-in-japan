@@ -192,7 +192,9 @@ const Game = {
     s.arrived = arrived;
     Save.write(s);
 
-    const baseMessage = `${candidate.targetName} に到着した。`;
+    const baseMessage = candidate.cost > 0
+      ? `${candidate.targetName} に到着した(運賃 ¥${candidate.cost.toLocaleString()})。`
+      : `${candidate.targetName} に到着した。`;
     return { ok: true, message: eventMessage ? `${baseMessage}\n${eventMessage}` : baseMessage, arrived };
   },
 

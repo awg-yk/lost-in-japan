@@ -128,6 +128,13 @@ function onChooseCandidate(candidate) {
   toast(result.message);
   renderHud();
 
+  // ヒッチハイク失敗や所持金不足の場合は現在地が変わっていないため、
+  // 地図上のマーカーも動かさない(移動した見た目にならないようにする)。
+  if (!result.ok) {
+    renderCandidates();
+    return;
+  }
+
   const node = candidate.targetType === 'place' ? Game.data.placesById.get(candidate.targetId) : Game.data.stationsById.get(candidate.targetId);
   MapView.markVisited(node, candidate.isNew);
   MapView.setCurrent(node, true);
