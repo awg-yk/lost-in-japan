@@ -276,7 +276,7 @@ def build_nearest_neighbor_edges(stations, k=2):
             key=lambda x: x[0],
         )
         for dist_km, b in dists[:k]:
-            cost = max(200, round(dist_km * 25, -2))
+            cost = max(200, round(dist_km * 12, -2))  # Phase3: 経済バランス調整(旧25円/km)
             edges.append({'fromId': a, 'toId': b, 'mode': 'rail', 'requiresTransport': [], 'cost': cost})
     return edges
 
@@ -314,7 +314,7 @@ def bridge_disconnected_components(stations, edges):
                 if best is None or d < best[0]:
                     best = (d, a, b)
         dist_km, a, b = best
-        cost = max(200, round(dist_km * 25, -2))
+        cost = max(200, round(dist_km * 12, -2))  # Phase3: 経済バランス調整(旧25円/km)
         bridge = {'fromId': a, 'toId': b, 'mode': 'rail', 'requiresTransport': [], 'cost': cost}
         edges.append(bridge)
         added.append(bridge)

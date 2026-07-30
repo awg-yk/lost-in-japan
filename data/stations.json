@@ -1,83 +1,629 @@
 {
   "nodes": [
-    { "id": 1, "name": "稚内駅", "type": "station", "lat": 45.4159, "lng": 141.6733, "prefecture": "北海道", "lines": ["宗谷本線"], "discoveryScore": 62, "reward": 150, "gridKey": "45.4_141.6",
-      "connections": [ { "toId": 2, "mode": "rail", "requiresTransport": [], "cost": 7000 } ] },
-    { "id": 2, "name": "札幌駅", "type": "station", "lat": 43.0686, "lng": 141.3508, "prefecture": "北海道", "lines": ["函館本線", "千歳線"], "discoveryScore": 20, "reward": 60, "gridKey": "43.0_141.3",
+    {
+      "id": 1,
+      "name": "稚内駅",
+      "type": "station",
+      "lat": 45.4159,
+      "lng": 141.6733,
+      "prefecture": "北海道",
+      "lines": [
+        "宗谷本線"
+      ],
+      "discoveryScore": 62,
+      "reward": 150,
+      "gridKey": "45.4_141.6",
       "connections": [
-        { "toId": 3, "mode": "rail", "requiresTransport": [], "cost": 5000 },
-        { "toId": 26, "mode": "rail", "requiresTransport": [], "cost": 1600 }
-      ] },
-    { "id": 3, "name": "函館駅", "type": "station", "lat": 41.7737, "lng": 140.7261, "prefecture": "北海道", "lines": ["函館本線", "北海道新幹線"], "discoveryScore": 38, "reward": 90, "gridKey": "41.7_140.7",
-      "connections": [ { "toId": 4, "mode": "rail", "requiresTransport": [], "cost": 4500 } ] },
-    { "id": 4, "name": "新青森駅", "type": "station", "lat": 40.8203, "lng": 140.6969, "prefecture": "青森県", "lines": ["東北新幹線", "北海道新幹線"], "discoveryScore": 35, "reward": 85, "gridKey": "40.8_140.6",
-      "connections": [ { "toId": 5, "mode": "rail", "requiresTransport": [], "cost": 3200 } ] },
-    { "id": 5, "name": "盛岡駅", "type": "station", "lat": 39.7016, "lng": 141.1382, "prefecture": "岩手県", "lines": ["東北新幹線", "田沢湖線"], "discoveryScore": 40, "reward": 95, "gridKey": "39.7_141.1",
-      "connections": [ { "toId": 6, "mode": "rail", "requiresTransport": [], "cost": 4200 } ] },
-    { "id": 6, "name": "仙台駅", "type": "station", "lat": 38.2602, "lng": 140.8827, "prefecture": "宮城県", "lines": ["東北新幹線", "仙石線"], "discoveryScore": 28, "reward": 70, "gridKey": "38.2_140.8",
-      "connections": [ { "toId": 7, "mode": "rail", "requiresTransport": [], "cost": 11000 } ] },
-    { "id": 7, "name": "東京駅", "type": "station", "lat": 35.6812, "lng": 139.7671, "prefecture": "東京都", "lines": ["東海道新幹線", "東北新幹線", "山手線"], "discoveryScore": 10, "reward": 40, "gridKey": "35.6_139.7",
+        {
+          "toId": 2,
+          "mode": "rail",
+          "requiresTransport": [],
+          "cost": 3200
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "name": "札幌駅",
+      "type": "station",
+      "lat": 43.0686,
+      "lng": 141.3508,
+      "prefecture": "北海道",
+      "lines": [
+        "函館本線",
+        "千歳線"
+      ],
+      "discoveryScore": 20,
+      "reward": 60,
+      "gridKey": "43.0_141.3",
       "connections": [
-        { "toId": 8, "mode": "rail", "requiresTransport": [], "cost": 11000 },
-        { "toId": 20, "mode": "rail", "requiresTransport": [], "cost": 8200 },
-        { "toId": 24, "mode": "rail", "requiresTransport": [], "cost": 900 }
-      ] },
-    { "id": 8, "name": "名古屋駅", "type": "station", "lat": 35.1706, "lng": 136.8816, "prefecture": "愛知県", "lines": ["東海道新幹線"], "discoveryScore": 18, "reward": 55, "gridKey": "35.1_136.8",
+        {
+          "toId": 3,
+          "mode": "rail",
+          "requiresTransport": [],
+          "cost": 2200
+        },
+        {
+          "toId": 26,
+          "mode": "rail",
+          "requiresTransport": [],
+          "cost": 700
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "name": "函館駅",
+      "type": "station",
+      "lat": 41.7737,
+      "lng": 140.7261,
+      "prefecture": "北海道",
+      "lines": [
+        "函館本線",
+        "北海道新幹線"
+      ],
+      "discoveryScore": 38,
+      "reward": 90,
+      "gridKey": "41.7_140.7",
       "connections": [
-        { "toId": 9, "mode": "rail", "requiresTransport": [], "cost": 7200 },
-        { "toId": 10, "mode": "rail", "requiresTransport": [], "cost": 6300 }
-      ] },
-    { "id": 9, "name": "金沢駅", "type": "station", "lat": 36.5779, "lng": 136.6483, "prefecture": "石川県", "lines": ["北陸新幹線"], "discoveryScore": 32, "reward": 80, "gridKey": "36.5_136.6",
-      "connections": [] },
-    { "id": 10, "name": "京都駅", "type": "station", "lat": 34.9858, "lng": 135.7588, "prefecture": "京都府", "lines": ["東海道新幹線", "山陰本線"], "discoveryScore": 15, "reward": 50, "gridKey": "34.9_135.7",
-      "connections": [ { "toId": 11, "mode": "rail", "requiresTransport": [], "cost": 1500 } ] },
-    { "id": 11, "name": "大阪駅", "type": "station", "lat": 34.7024, "lng": 135.4959, "prefecture": "大阪府", "lines": ["東海道本線", "山陽新幹線"], "discoveryScore": 12, "reward": 42, "gridKey": "34.7_135.4",
+        {
+          "toId": 4,
+          "mode": "rail",
+          "requiresTransport": [],
+          "cost": 2000
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "name": "新青森駅",
+      "type": "station",
+      "lat": 40.8203,
+      "lng": 140.6969,
+      "prefecture": "青森県",
+      "lines": [
+        "東北新幹線",
+        "北海道新幹線"
+      ],
+      "discoveryScore": 35,
+      "reward": 85,
+      "gridKey": "40.8_140.6",
       "connections": [
-        { "toId": 12, "mode": "rail", "requiresTransport": [], "cost": 800 },
-        { "toId": 13, "mode": "rail", "requiresTransport": [], "cost": 10500 },
-        { "toId": 17, "mode": "rail", "requiresTransport": [], "cost": 6400 }
-      ] },
-    { "id": 12, "name": "神戸駅", "type": "station", "lat": 34.6803, "lng": 135.1773, "prefecture": "兵庫県", "lines": ["東海道本線"], "discoveryScore": 22, "reward": 62, "gridKey": "34.6_135.1",
-      "connections": [] },
-    { "id": 13, "name": "広島駅", "type": "station", "lat": 34.3978, "lng": 132.4753, "prefecture": "広島県", "lines": ["山陽新幹線"], "discoveryScore": 25, "reward": 65, "gridKey": "34.3_132.4",
-      "connections": [ { "toId": 14, "mode": "rail", "requiresTransport": [], "cost": 9200 } ] },
-    { "id": 14, "name": "博多駅", "type": "station", "lat": 33.5896, "lng": 130.4207, "prefecture": "福岡県", "lines": ["山陽新幹線", "九州新幹線"], "discoveryScore": 20, "reward": 60, "gridKey": "33.5_130.4",
+        {
+          "toId": 5,
+          "mode": "rail",
+          "requiresTransport": [],
+          "cost": 1400
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "name": "盛岡駅",
+      "type": "station",
+      "lat": 39.7016,
+      "lng": 141.1382,
+      "prefecture": "岩手県",
+      "lines": [
+        "東北新幹線",
+        "田沢湖線"
+      ],
+      "discoveryScore": 40,
+      "reward": 95,
+      "gridKey": "39.7_141.1",
       "connections": [
-        { "toId": 15, "mode": "rail", "requiresTransport": [], "cost": 5200 },
-        { "toId": 25, "mode": "rail", "requiresTransport": [], "cost": 520 },
-        { "toId": 22, "mode": "ferry", "requiresTransport": ["ferry"], "cost": 5200 }
-      ] },
-    { "id": 15, "name": "熊本駅", "type": "station", "lat": 32.7898, "lng": 130.7417, "prefecture": "熊本県", "lines": ["九州新幹線"], "discoveryScore": 30, "reward": 75, "gridKey": "32.7_130.7",
-      "connections": [ { "toId": 16, "mode": "rail", "requiresTransport": [], "cost": 6200 } ] },
-    { "id": 16, "name": "鹿児島中央駅", "type": "station", "lat": 31.5836, "lng": 130.5406, "prefecture": "鹿児島県", "lines": ["九州新幹線"], "discoveryScore": 33, "reward": 80, "gridKey": "31.5_130.5",
-      "connections": [ { "toId": 19, "mode": "ferry", "requiresTransport": ["ferry"], "cost": 9500 } ] },
-    { "id": 17, "name": "高松駅", "type": "station", "lat": 34.3521, "lng": 134.0508, "prefecture": "香川県", "lines": ["瀬戸大橋線", "予讃線"], "discoveryScore": 36, "reward": 88, "gridKey": "34.3_134.0",
-      "connections": [ { "toId": 18, "mode": "rail", "requiresTransport": [], "cost": 4300 } ] },
-    { "id": 18, "name": "松山駅", "type": "station", "lat": 33.8455, "lng": 132.7657, "prefecture": "愛媛県", "lines": ["予讃線"], "discoveryScore": 37, "reward": 88, "gridKey": "33.8_132.7",
-      "connections": [] },
-    { "id": 19, "name": "那覇空港", "type": "airport", "lat": 26.1958, "lng": 127.6458, "prefecture": "沖縄県", "lines": [], "discoveryScore": 24, "reward": 65, "gridKey": "26.1_127.6",
+        {
+          "toId": 6,
+          "mode": "rail",
+          "requiresTransport": [],
+          "cost": 1900
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "name": "仙台駅",
+      "type": "station",
+      "lat": 38.2602,
+      "lng": 140.8827,
+      "prefecture": "宮城県",
+      "lines": [
+        "東北新幹線",
+        "仙石線"
+      ],
+      "discoveryScore": 28,
+      "reward": 70,
+      "gridKey": "38.2_140.8",
       "connections": [
-        { "toId": 23, "mode": "flight", "requiresTransport": ["flight"], "cost": 16000 },
-        { "toId": 23, "mode": "flight", "requiresTransport": ["flight"], "cost": 5200, "isBudget": true }
-      ] },
-    { "id": 20, "name": "新潟駅", "type": "station", "lat": 37.9161, "lng": 139.0364, "prefecture": "新潟県", "lines": ["上越新幹線"], "discoveryScore": 34, "reward": 82, "gridKey": "37.9_139.0",
-      "connections": [ { "toId": 21, "mode": "ferry", "requiresTransport": ["ferry"], "cost": 3200 } ] },
-    { "id": 21, "name": "両津港", "type": "port", "lat": 38.0781, "lng": 138.4353, "prefecture": "新潟県", "lines": [], "discoveryScore": 58, "reward": 140, "gridKey": "38.0_138.4",
-      "connections": [] },
-    { "id": 22, "name": "厳原港(対馬)", "type": "port", "lat": 34.2016, "lng": 129.2900, "prefecture": "長崎県", "lines": [], "discoveryScore": 60, "reward": 145, "gridKey": "34.2_129.2",
-      "connections": [ { "toId": 25, "mode": "flight", "requiresTransport": ["flight"], "cost": 12000 }, { "toId": 25, "mode": "flight", "requiresTransport": ["flight"], "cost": 4200, "isBudget": true } ] },
-    { "id": 23, "name": "南大東空港", "type": "airport", "lat": 25.8467, "lng": 131.2611, "prefecture": "沖縄県", "lines": [], "discoveryScore": 75, "reward": 190, "gridKey": "25.8_131.2",
-      "connections": [] },
-    { "id": 24, "name": "羽田空港", "type": "airport", "lat": 35.5494, "lng": 139.7798, "prefecture": "東京都", "lines": [], "discoveryScore": 8, "reward": 35, "gridKey": "35.5_139.7",
+        {
+          "toId": 7,
+          "mode": "rail",
+          "requiresTransport": [],
+          "cost": 5000
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "name": "東京駅",
+      "type": "station",
+      "lat": 35.6812,
+      "lng": 139.7671,
+      "prefecture": "東京都",
+      "lines": [
+        "東海道新幹線",
+        "東北新幹線",
+        "山手線"
+      ],
+      "discoveryScore": 10,
+      "reward": 40,
+      "gridKey": "35.6_139.7",
       "connections": [
-        { "toId": 19, "mode": "flight", "requiresTransport": ["flight"], "cost": 26000 },
-        { "toId": 19, "mode": "flight", "requiresTransport": ["flight"], "cost": 9000, "isBudget": true }
-      ] },
-    { "id": 25, "name": "福岡空港", "type": "airport", "lat": 33.5859, "lng": 130.4515, "prefecture": "福岡県", "lines": [], "discoveryScore": 16, "reward": 50, "gridKey": "33.5_130.4",
+        {
+          "toId": 8,
+          "mode": "rail",
+          "requiresTransport": [],
+          "cost": 5000
+        },
+        {
+          "toId": 20,
+          "mode": "rail",
+          "requiresTransport": [],
+          "cost": 3700
+        },
+        {
+          "toId": 24,
+          "mode": "rail",
+          "requiresTransport": [],
+          "cost": 400
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "name": "名古屋駅",
+      "type": "station",
+      "lat": 35.1706,
+      "lng": 136.8816,
+      "prefecture": "愛知県",
+      "lines": [
+        "東海道新幹線"
+      ],
+      "discoveryScore": 18,
+      "reward": 55,
+      "gridKey": "35.1_136.8",
       "connections": [
-        { "toId": 19, "mode": "flight", "requiresTransport": ["flight"], "cost": 21000 },
-        { "toId": 19, "mode": "flight", "requiresTransport": ["flight"], "cost": 7000, "isBudget": true }
-      ] },
-    { "id": 26, "name": "新千歳空港", "type": "airport", "lat": 42.7752, "lng": 141.6923, "prefecture": "北海道", "lines": [], "discoveryScore": 26, "reward": 68, "gridKey": "42.7_141.6",
-      "connections": [] }
+        {
+          "toId": 9,
+          "mode": "rail",
+          "requiresTransport": [],
+          "cost": 3200
+        },
+        {
+          "toId": 10,
+          "mode": "rail",
+          "requiresTransport": [],
+          "cost": 2800
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "name": "金沢駅",
+      "type": "station",
+      "lat": 36.5779,
+      "lng": 136.6483,
+      "prefecture": "石川県",
+      "lines": [
+        "北陸新幹線"
+      ],
+      "discoveryScore": 32,
+      "reward": 80,
+      "gridKey": "36.5_136.6",
+      "connections": []
+    },
+    {
+      "id": 10,
+      "name": "京都駅",
+      "type": "station",
+      "lat": 34.9858,
+      "lng": 135.7588,
+      "prefecture": "京都府",
+      "lines": [
+        "東海道新幹線",
+        "山陰本線"
+      ],
+      "discoveryScore": 15,
+      "reward": 50,
+      "gridKey": "34.9_135.7",
+      "connections": [
+        {
+          "toId": 11,
+          "mode": "rail",
+          "requiresTransport": [],
+          "cost": 700
+        }
+      ]
+    },
+    {
+      "id": 11,
+      "name": "大阪駅",
+      "type": "station",
+      "lat": 34.7024,
+      "lng": 135.4959,
+      "prefecture": "大阪府",
+      "lines": [
+        "東海道本線",
+        "山陽新幹線"
+      ],
+      "discoveryScore": 12,
+      "reward": 42,
+      "gridKey": "34.7_135.4",
+      "connections": [
+        {
+          "toId": 12,
+          "mode": "rail",
+          "requiresTransport": [],
+          "cost": 400
+        },
+        {
+          "toId": 13,
+          "mode": "rail",
+          "requiresTransport": [],
+          "cost": 4700
+        },
+        {
+          "toId": 17,
+          "mode": "rail",
+          "requiresTransport": [],
+          "cost": 2900
+        }
+      ]
+    },
+    {
+      "id": 12,
+      "name": "神戸駅",
+      "type": "station",
+      "lat": 34.6803,
+      "lng": 135.1773,
+      "prefecture": "兵庫県",
+      "lines": [
+        "東海道本線"
+      ],
+      "discoveryScore": 22,
+      "reward": 62,
+      "gridKey": "34.6_135.1",
+      "connections": []
+    },
+    {
+      "id": 13,
+      "name": "広島駅",
+      "type": "station",
+      "lat": 34.3978,
+      "lng": 132.4753,
+      "prefecture": "広島県",
+      "lines": [
+        "山陽新幹線"
+      ],
+      "discoveryScore": 25,
+      "reward": 65,
+      "gridKey": "34.3_132.4",
+      "connections": [
+        {
+          "toId": 14,
+          "mode": "rail",
+          "requiresTransport": [],
+          "cost": 4100
+        }
+      ]
+    },
+    {
+      "id": 14,
+      "name": "博多駅",
+      "type": "station",
+      "lat": 33.5896,
+      "lng": 130.4207,
+      "prefecture": "福岡県",
+      "lines": [
+        "山陽新幹線",
+        "九州新幹線"
+      ],
+      "discoveryScore": 20,
+      "reward": 60,
+      "gridKey": "33.5_130.4",
+      "connections": [
+        {
+          "toId": 15,
+          "mode": "rail",
+          "requiresTransport": [],
+          "cost": 2300
+        },
+        {
+          "toId": 25,
+          "mode": "rail",
+          "requiresTransport": [],
+          "cost": 200
+        },
+        {
+          "toId": 22,
+          "mode": "ferry",
+          "requiresTransport": [
+            "ferry"
+          ],
+          "cost": 2300
+        }
+      ]
+    },
+    {
+      "id": 15,
+      "name": "熊本駅",
+      "type": "station",
+      "lat": 32.7898,
+      "lng": 130.7417,
+      "prefecture": "熊本県",
+      "lines": [
+        "九州新幹線"
+      ],
+      "discoveryScore": 30,
+      "reward": 75,
+      "gridKey": "32.7_130.7",
+      "connections": [
+        {
+          "toId": 16,
+          "mode": "rail",
+          "requiresTransport": [],
+          "cost": 2800
+        }
+      ]
+    },
+    {
+      "id": 16,
+      "name": "鹿児島中央駅",
+      "type": "station",
+      "lat": 31.5836,
+      "lng": 130.5406,
+      "prefecture": "鹿児島県",
+      "lines": [
+        "九州新幹線"
+      ],
+      "discoveryScore": 33,
+      "reward": 80,
+      "gridKey": "31.5_130.5",
+      "connections": [
+        {
+          "toId": 19,
+          "mode": "ferry",
+          "requiresTransport": [
+            "ferry"
+          ],
+          "cost": 4300
+        }
+      ]
+    },
+    {
+      "id": 17,
+      "name": "高松駅",
+      "type": "station",
+      "lat": 34.3521,
+      "lng": 134.0508,
+      "prefecture": "香川県",
+      "lines": [
+        "瀬戸大橋線",
+        "予讃線"
+      ],
+      "discoveryScore": 36,
+      "reward": 88,
+      "gridKey": "34.3_134.0",
+      "connections": [
+        {
+          "toId": 18,
+          "mode": "rail",
+          "requiresTransport": [],
+          "cost": 1900
+        }
+      ]
+    },
+    {
+      "id": 18,
+      "name": "松山駅",
+      "type": "station",
+      "lat": 33.8455,
+      "lng": 132.7657,
+      "prefecture": "愛媛県",
+      "lines": [
+        "予讃線"
+      ],
+      "discoveryScore": 37,
+      "reward": 88,
+      "gridKey": "33.8_132.7",
+      "connections": []
+    },
+    {
+      "id": 19,
+      "name": "那覇空港",
+      "type": "airport",
+      "lat": 26.1958,
+      "lng": 127.6458,
+      "prefecture": "沖縄県",
+      "lines": [],
+      "discoveryScore": 24,
+      "reward": 65,
+      "gridKey": "26.1_127.6",
+      "connections": [
+        {
+          "toId": 23,
+          "mode": "flight",
+          "requiresTransport": [
+            "flight"
+          ],
+          "cost": 8000
+        },
+        {
+          "toId": 23,
+          "mode": "flight",
+          "requiresTransport": [
+            "flight"
+          ],
+          "cost": 2600,
+          "isBudget": true
+        }
+      ]
+    },
+    {
+      "id": 20,
+      "name": "新潟駅",
+      "type": "station",
+      "lat": 37.9161,
+      "lng": 139.0364,
+      "prefecture": "新潟県",
+      "lines": [
+        "上越新幹線"
+      ],
+      "discoveryScore": 34,
+      "reward": 82,
+      "gridKey": "37.9_139.0",
+      "connections": [
+        {
+          "toId": 21,
+          "mode": "ferry",
+          "requiresTransport": [
+            "ferry"
+          ],
+          "cost": 1400
+        }
+      ]
+    },
+    {
+      "id": 21,
+      "name": "両津港",
+      "type": "port",
+      "lat": 38.0781,
+      "lng": 138.4353,
+      "prefecture": "新潟県",
+      "lines": [],
+      "discoveryScore": 58,
+      "reward": 140,
+      "gridKey": "38.0_138.4",
+      "connections": []
+    },
+    {
+      "id": 22,
+      "name": "厳原港(対馬)",
+      "type": "port",
+      "lat": 34.2016,
+      "lng": 129.29,
+      "prefecture": "長崎県",
+      "lines": [],
+      "discoveryScore": 60,
+      "reward": 145,
+      "gridKey": "34.2_129.2",
+      "connections": [
+        {
+          "toId": 25,
+          "mode": "flight",
+          "requiresTransport": [
+            "flight"
+          ],
+          "cost": 6000
+        },
+        {
+          "toId": 25,
+          "mode": "flight",
+          "requiresTransport": [
+            "flight"
+          ],
+          "cost": 2100,
+          "isBudget": true
+        }
+      ]
+    },
+    {
+      "id": 23,
+      "name": "南大東空港",
+      "type": "airport",
+      "lat": 25.8467,
+      "lng": 131.2611,
+      "prefecture": "沖縄県",
+      "lines": [],
+      "discoveryScore": 75,
+      "reward": 190,
+      "gridKey": "25.8_131.2",
+      "connections": []
+    },
+    {
+      "id": 24,
+      "name": "羽田空港",
+      "type": "airport",
+      "lat": 35.5494,
+      "lng": 139.7798,
+      "prefecture": "東京都",
+      "lines": [],
+      "discoveryScore": 8,
+      "reward": 35,
+      "gridKey": "35.5_139.7",
+      "connections": [
+        {
+          "toId": 19,
+          "mode": "flight",
+          "requiresTransport": [
+            "flight"
+          ],
+          "cost": 13000
+        },
+        {
+          "toId": 19,
+          "mode": "flight",
+          "requiresTransport": [
+            "flight"
+          ],
+          "cost": 4500,
+          "isBudget": true
+        }
+      ]
+    },
+    {
+      "id": 25,
+      "name": "福岡空港",
+      "type": "airport",
+      "lat": 33.5859,
+      "lng": 130.4515,
+      "prefecture": "福岡県",
+      "lines": [],
+      "discoveryScore": 16,
+      "reward": 50,
+      "gridKey": "33.5_130.4",
+      "connections": [
+        {
+          "toId": 19,
+          "mode": "flight",
+          "requiresTransport": [
+            "flight"
+          ],
+          "cost": 10500
+        },
+        {
+          "toId": 19,
+          "mode": "flight",
+          "requiresTransport": [
+            "flight"
+          ],
+          "cost": 3500,
+          "isBudget": true
+        }
+      ]
+    },
+    {
+      "id": 26,
+      "name": "新千歳空港",
+      "type": "airport",
+      "lat": 42.7752,
+      "lng": 141.6923,
+      "prefecture": "北海道",
+      "lines": [],
+      "discoveryScore": 26,
+      "reward": 68,
+      "gridKey": "42.7_141.6",
+      "connections": []
+    }
   ]
 }

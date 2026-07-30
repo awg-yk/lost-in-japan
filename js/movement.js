@@ -2,9 +2,13 @@
 
 const WALK_RADIUS_KM_DEFAULT = 8;
 const WALK_RADIUS_KM_LOW_STAT = 5;
-const HITCHHIKE_BASE_RATE_LAND = 0.85;
+// Phase3バランス調整: 当初0.85だったが、シミュレーションで有料交通機関がほぼ
+// 選ばれなくなる(ヒッチハイクが常に支配的候補になる)ことが判明したため引き下げた。
+// §7.1.1で基礎成功率が明示されているferryの30%はそのまま維持する。
+const HITCHHIKE_BASE_RATE_LAND = 0.55;
 const HITCHHIKE_BASE_RATE_FERRY = 0.30;
 const HITCHHIKE_LOW_STAT_PENALTY = 0.15;
+const HITCHHIKE_SCORE_PENALTY = 0.04;
 const MAX_CANDIDATES = 5;
 
 function haversineKm(lat1, lng1, lat2, lng2) {
@@ -321,10 +325,15 @@ function generateCandidates(ctx) {
       }
 
       // ヒッチハイク候補(flightのみで隔てられた区間では不可。§7.1.1)
+      // Phase3: 失敗すればその場に留まるだけ(進まない)なので、期待値としての
+      // 進行度は progress * successRate になる。これをスコアに反映しないと、
+      // 無料・高成功率のヒッチハイクが常に有料交通機関を上回ってしまい
+      // (シミュレーションで実際に確認)、所持金を使う理由が無くなってしまう。
       if (!flightOnly) {
         const isFerry = conn.requiresTransport.includes('ferry');
         const baseRate = isFerry ? HITCHHIKE_BASE_RATE_FERRY : HITCHHIKE_BASE_RATE_LAND;
         const successRate = Math.max(0.05, baseRate - (lowStat ? HITCHHIKE_LOW_STAT_PENALTY : 0));
+        const expectedProgress = progress * successRate;
         result.push({
           key: `hitchhike_${currentNode.id}_${toNode.id}`,
           targetId: toNode.id,
@@ -337,7 +346,7 @@ function generateCandidates(ctx) {
           successRate,
           discoveryScore: toNode.discoveryScore || 0,
           isNew: !discoveredSet.has(toNode.id),
-          score: candidateScore({ progress, discoveryScore: discovery, transportScore: transportScoreVal }) - 0.02,
+          score: candidateScore({ progress: expectedProgress, discoveryScore: discovery, transportScore: transportScoreVal }) - HITCHHIKE_SCORE_PENALTY,
         });
       }
     }

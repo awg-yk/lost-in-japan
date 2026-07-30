@@ -12,11 +12,18 @@ const DRINK_COST = 150;
 const DRINK_THIRST_GAIN = 45;
 
 const RANDOM_EVENT_CHANCE = 0.25;
+// Phase3: §7.3の例(お金を拾う/地域グルメ/珍しい発見/地元イベント/ヒッチハイク成功)
+// を踏まえ、4種類から8種類に拡充した。全て正の効果か中立の演出のみとし、
+// 「発見の旅」の気分を損なわないようにしている(ネガティブなペナルティ演出は含めない)。
 const RANDOM_EVENTS = [
   { weight: 3, apply: () => { const amount = 200 + Math.floor(Math.random() * 600); Game.state.money += amount; return `道端で ¥${amount} を拾った！`; } },
   { weight: 3, apply: () => { Game.state.hunger = Math.min(100, Game.state.hunger + 20); return '地元のグルメを味見して、少しお腹が満たされた。'; } },
   { weight: 2, apply: () => { const bonus = 50 + Math.floor(Math.random() * 100); Game.state.money += bonus; return `珍しいものを見つけてちょっとした収入(¥${bonus})になった。`; } },
   { weight: 2, apply: () => '地元のイベントに遭遇した。旅の思い出が一つ増えた。' },
+  { weight: 3, apply: () => { Game.state.thirst = Math.min(100, Game.state.thirst + 15); return '自販機でおまけの一本が出てきた。少し喉が潤った。'; } },
+  { weight: 2, apply: () => { Game.state.hunger = Math.min(100, Game.state.hunger + 10); Game.state.thirst = Math.min(100, Game.state.thirst + 10); return '地元の人に手土産をもらった。'; } },
+  { weight: 2, apply: () => { const discount = 100 + Math.floor(Math.random() * 200); Game.state.money += discount; return `お得な情報を教えてもらい、¥${discount}分お得になった。`; } },
+  { weight: 1, apply: () => '道端で野生の生き物に遭遇した。旅の良い思い出になった。' },
 ];
 
 const Game = {

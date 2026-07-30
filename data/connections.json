@@ -1,37 +1,255 @@
 {
   "comment": "駅・空港・港どうしを結ぶ接続の一次データ(生成物)。ゲーム実行時はstations.json内に埋め込み済みのconnectionsを使用する。tools/data_generator.pyのStep4で本ファイルからstations.jsonへ変換・埋め込みを行う想定。",
   "edges": [
-    { "fromId": 1, "toId": 2, "mode": "rail", "requiresTransport": [], "cost": 7000 },
-    { "fromId": 2, "toId": 3, "mode": "rail", "requiresTransport": [], "cost": 5000 },
-    { "fromId": 3, "toId": 4, "mode": "rail", "requiresTransport": [], "cost": 4500 },
-    { "fromId": 4, "toId": 5, "mode": "rail", "requiresTransport": [], "cost": 3200 },
-    { "fromId": 5, "toId": 6, "mode": "rail", "requiresTransport": [], "cost": 4200 },
-    { "fromId": 6, "toId": 7, "mode": "rail", "requiresTransport": [], "cost": 11000 },
-    { "fromId": 7, "toId": 8, "mode": "rail", "requiresTransport": [], "cost": 11000 },
-    { "fromId": 8, "toId": 9, "mode": "rail", "requiresTransport": [], "cost": 7200 },
-    { "fromId": 8, "toId": 10, "mode": "rail", "requiresTransport": [], "cost": 6300 },
-    { "fromId": 10, "toId": 11, "mode": "rail", "requiresTransport": [], "cost": 1500 },
-    { "fromId": 11, "toId": 12, "mode": "rail", "requiresTransport": [], "cost": 800 },
-    { "fromId": 11, "toId": 13, "mode": "rail", "requiresTransport": [], "cost": 10500 },
-    { "fromId": 13, "toId": 14, "mode": "rail", "requiresTransport": [], "cost": 9200 },
-    { "fromId": 14, "toId": 15, "mode": "rail", "requiresTransport": [], "cost": 5200 },
-    { "fromId": 15, "toId": 16, "mode": "rail", "requiresTransport": [], "cost": 6200 },
-    { "fromId": 11, "toId": 17, "mode": "rail", "requiresTransport": [], "cost": 6400 },
-    { "fromId": 17, "toId": 18, "mode": "rail", "requiresTransport": [], "cost": 4300 },
-    { "fromId": 7, "toId": 20, "mode": "rail", "requiresTransport": [], "cost": 8200 },
-    { "fromId": 2, "toId": 26, "mode": "rail", "requiresTransport": [], "cost": 1600 },
-    { "fromId": 7, "toId": 24, "mode": "rail", "requiresTransport": [], "cost": 900 },
-    { "fromId": 14, "toId": 25, "mode": "rail", "requiresTransport": [], "cost": 520 },
-    { "fromId": 20, "toId": 21, "mode": "ferry", "requiresTransport": ["ferry"], "cost": 3200 },
-    { "fromId": 14, "toId": 22, "mode": "ferry", "requiresTransport": ["ferry"], "cost": 5200 },
-    { "fromId": 25, "toId": 22, "mode": "flight", "requiresTransport": ["flight"], "cost": 12000 },
-    { "fromId": 25, "toId": 22, "mode": "flight", "requiresTransport": ["flight"], "cost": 4200, "isBudget": true },
-    { "fromId": 24, "toId": 19, "mode": "flight", "requiresTransport": ["flight"], "cost": 26000 },
-    { "fromId": 24, "toId": 19, "mode": "flight", "requiresTransport": ["flight"], "cost": 9000, "isBudget": true },
-    { "fromId": 25, "toId": 19, "mode": "flight", "requiresTransport": ["flight"], "cost": 21000 },
-    { "fromId": 25, "toId": 19, "mode": "flight", "requiresTransport": ["flight"], "cost": 7000, "isBudget": true },
-    { "fromId": 16, "toId": 19, "mode": "ferry", "requiresTransport": ["ferry"], "cost": 9500 },
-    { "fromId": 19, "toId": 23, "mode": "flight", "requiresTransport": ["flight"], "cost": 16000 },
-    { "fromId": 19, "toId": 23, "mode": "flight", "requiresTransport": ["flight"], "cost": 5200, "isBudget": true }
+    {
+      "fromId": 1,
+      "toId": 2,
+      "mode": "rail",
+      "requiresTransport": [],
+      "cost": 3200
+    },
+    {
+      "fromId": 2,
+      "toId": 3,
+      "mode": "rail",
+      "requiresTransport": [],
+      "cost": 2200
+    },
+    {
+      "fromId": 3,
+      "toId": 4,
+      "mode": "rail",
+      "requiresTransport": [],
+      "cost": 2000
+    },
+    {
+      "fromId": 4,
+      "toId": 5,
+      "mode": "rail",
+      "requiresTransport": [],
+      "cost": 1400
+    },
+    {
+      "fromId": 5,
+      "toId": 6,
+      "mode": "rail",
+      "requiresTransport": [],
+      "cost": 1900
+    },
+    {
+      "fromId": 6,
+      "toId": 7,
+      "mode": "rail",
+      "requiresTransport": [],
+      "cost": 5000
+    },
+    {
+      "fromId": 7,
+      "toId": 8,
+      "mode": "rail",
+      "requiresTransport": [],
+      "cost": 5000
+    },
+    {
+      "fromId": 8,
+      "toId": 9,
+      "mode": "rail",
+      "requiresTransport": [],
+      "cost": 3200
+    },
+    {
+      "fromId": 8,
+      "toId": 10,
+      "mode": "rail",
+      "requiresTransport": [],
+      "cost": 2800
+    },
+    {
+      "fromId": 10,
+      "toId": 11,
+      "mode": "rail",
+      "requiresTransport": [],
+      "cost": 700
+    },
+    {
+      "fromId": 11,
+      "toId": 12,
+      "mode": "rail",
+      "requiresTransport": [],
+      "cost": 400
+    },
+    {
+      "fromId": 11,
+      "toId": 13,
+      "mode": "rail",
+      "requiresTransport": [],
+      "cost": 4700
+    },
+    {
+      "fromId": 13,
+      "toId": 14,
+      "mode": "rail",
+      "requiresTransport": [],
+      "cost": 4100
+    },
+    {
+      "fromId": 14,
+      "toId": 15,
+      "mode": "rail",
+      "requiresTransport": [],
+      "cost": 2300
+    },
+    {
+      "fromId": 15,
+      "toId": 16,
+      "mode": "rail",
+      "requiresTransport": [],
+      "cost": 2800
+    },
+    {
+      "fromId": 11,
+      "toId": 17,
+      "mode": "rail",
+      "requiresTransport": [],
+      "cost": 2900
+    },
+    {
+      "fromId": 17,
+      "toId": 18,
+      "mode": "rail",
+      "requiresTransport": [],
+      "cost": 1900
+    },
+    {
+      "fromId": 7,
+      "toId": 20,
+      "mode": "rail",
+      "requiresTransport": [],
+      "cost": 3700
+    },
+    {
+      "fromId": 2,
+      "toId": 26,
+      "mode": "rail",
+      "requiresTransport": [],
+      "cost": 700
+    },
+    {
+      "fromId": 7,
+      "toId": 24,
+      "mode": "rail",
+      "requiresTransport": [],
+      "cost": 400
+    },
+    {
+      "fromId": 14,
+      "toId": 25,
+      "mode": "rail",
+      "requiresTransport": [],
+      "cost": 200
+    },
+    {
+      "fromId": 20,
+      "toId": 21,
+      "mode": "ferry",
+      "requiresTransport": [
+        "ferry"
+      ],
+      "cost": 1400
+    },
+    {
+      "fromId": 14,
+      "toId": 22,
+      "mode": "ferry",
+      "requiresTransport": [
+        "ferry"
+      ],
+      "cost": 2300
+    },
+    {
+      "fromId": 25,
+      "toId": 22,
+      "mode": "flight",
+      "requiresTransport": [
+        "flight"
+      ],
+      "cost": 6000
+    },
+    {
+      "fromId": 25,
+      "toId": 22,
+      "mode": "flight",
+      "requiresTransport": [
+        "flight"
+      ],
+      "cost": 2100,
+      "isBudget": true
+    },
+    {
+      "fromId": 24,
+      "toId": 19,
+      "mode": "flight",
+      "requiresTransport": [
+        "flight"
+      ],
+      "cost": 13000
+    },
+    {
+      "fromId": 24,
+      "toId": 19,
+      "mode": "flight",
+      "requiresTransport": [
+        "flight"
+      ],
+      "cost": 4500,
+      "isBudget": true
+    },
+    {
+      "fromId": 25,
+      "toId": 19,
+      "mode": "flight",
+      "requiresTransport": [
+        "flight"
+      ],
+      "cost": 10500
+    },
+    {
+      "fromId": 25,
+      "toId": 19,
+      "mode": "flight",
+      "requiresTransport": [
+        "flight"
+      ],
+      "cost": 3500,
+      "isBudget": true
+    },
+    {
+      "fromId": 16,
+      "toId": 19,
+      "mode": "ferry",
+      "requiresTransport": [
+        "ferry"
+      ],
+      "cost": 4300
+    },
+    {
+      "fromId": 19,
+      "toId": 23,
+      "mode": "flight",
+      "requiresTransport": [
+        "flight"
+      ],
+      "cost": 8000
+    },
+    {
+      "fromId": 19,
+      "toId": 23,
+      "mode": "flight",
+      "requiresTransport": [
+        "flight"
+      ],
+      "cost": 2600,
+      "isBudget": true
+    }
   ]
 }
