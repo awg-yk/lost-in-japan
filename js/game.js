@@ -5,7 +5,14 @@
 const DIFFICULTY_PRESETS = {
   easy: { label: 'EASY', initialMoney: 8000, hitchhikeLuckBonus: 0.15, eventChanceMultiplier: 1.3 },
   normal: { label: 'NORMAL', initialMoney: 5000, hitchhikeLuckBonus: 0, eventChanceMultiplier: 1.0 },
-  hard: { label: 'HARD', initialMoney: 3000, hitchhikeLuckBonus: -0.15, eventChanceMultiplier: 0.7 },
+  // 2026-07-30セッションでのバランス再調整: アルバイトの同一ノード3回上限
+  // (WORK_MAX_PER_NODE)導入後、HARDの初期¥3000は-15%ヒッチハイク運補正と
+  // 合わさって、遠方かつ運賃の高い目的地(特にflight-onlyの離島区間)で
+  // 資金繰りが厳しくなりがちなことがtests/regression.test.jsのシミュレーションで
+  // 判明した。¥4000への引き上げ(2000シードでの検証: 平均到着手数36.2→32.2、
+  // p99=223→185)によりEASY/NORMALとの明確な差は保ちつつ、極端な長期化の
+  // 頻度を抑えている。
+  hard: { label: 'HARD', initialMoney: 4000, hitchhikeLuckBonus: -0.15, eventChanceMultiplier: 0.7 },
 };
 
 // 空腹は移動時間の目安として全ての移動手段で減少する。
