@@ -31,24 +31,48 @@
 **ゴール**: `tools/data_generator.py` を実際にOverpass API / Wikipedia APIに
 接続して動かし、数百〜数千件規模の地点データを生成できる状態にする。
 
+> **⚠️ ネットワーク制約(重要)**: この開発サンドボックス環境のプロキシ設定では
+> `overpass-api.de` と `ja.wikipedia.org` へのアクセスが403でブロックされる
+> (`unpkg.com`がブロックされ、Leafletをvendoringで回避したのと同じ制約)。
+> そのため、以下のコード自体は実装・ロジック検証済みだが、**実際の全国データ生成は
+> このサンドボックス内では実行できていない**。ネットワーク制限のない環境
+> (自分のPC、CI等)で下記コマンドを実行してほしい:
+> ```
+> python3 tools/data_generator.py --regions kanto --out /tmp/test_kanto   # まず1地方で試す
+> python3 tools/validate_data.py --data /tmp/test_kanto                  # 検証
+> python3 tools/data_generator.py --regions all --out data                # 問題なければ全地方
+> python3 tools/validate_data.py --data data
+> ```
+> `--cache-dir`(デフォルト`tools/.cache`)にOverpass/Wikipediaの応答をキャッシュするので、
+> 二回目以降の再実行や地方追加時は既存キャッシュがあれば再取得されない。
+
 ### タスク
-- [ ] 地方・都道府県単位でbboxを分割して実行するバッチ処理を実装
-      (Overpassのタイムアウト・レート制限対策)
-- [ ] Wikipedia API呼び出しのキャッシュ機構(同一地点の再取得を避ける)
-- [ ] §5.1の孤立防止ルール(新幹線駅→主要駅→各地点の最寄り駅→ローカル線補完)を
-      実データに対して機械的に適用するロジックの実装
-- [ ] §7.1.1の格安flight必須ルールをOSMデータから機械的に検出・付与するロジック
-      (現在は`STRAIT_ISLAND_EDGES`に手動リストとして存在。自動検出に置き換えるか、
-      検出漏れがないかのバリデーションスクリプトを追加)
-- [ ] 生成したJSONのスキーマ検証(必須フィールド・型・discoveryScore範囲0-100など)
+- [x] 地方単位(8地方、`REGION_BBOXES`)でbboxを分割して実行するバッチ処理を実装
+      (Overpassのタイムアウト・レート制限対策。`--regions kanto,kansai`のように個別指定可)
+- [x] Overpass/Wikipedia両方にディスクキャッシュ機構を実装(`Cache`クラス、`tools/.cache/`)
+- [x] §5.1の孤立防止ルールを機械的に適用するロジックを実装
+      (`ensure_place_station_coverage`で各地点に最寄り駅を割り当て、
+      `bridge_disconnected_components`で連結成分が複数に分断されないよう補完)
+- [x] §7.1.1の格安flight必須ルールをグラフ構造から機械的に検出・付与するロジックを実装
+      (`ensure_budget_flight_edges`: 「flightのみの接続を取り除くと非連結になる
+      =単一障害点」を`is_bridge_edge`で判定し、該当区間にのみisBudget便を追加)
+- [x] 生成したJSONのスキーマ検証(`write_outputs`内、必須フィールド・discoveryScore範囲)
+- [x] 検証専用スクリプト `tools/validate_data.py` を新設
+      (スキーマ・nearestStationId実在性・単一連結成分・§7.1.1違反の4項目をチェック。
+      ネットワーク不要で既存data/*.jsonに対して実行済み → 現行31地点/26ノードはPASS)
+- [x] 純粋ロジック関数(discoveryScore計算・bridge判定・格安flight付与等)の
+      ユニットテストを追加(`tools/test_data_generator.py`、18件、ネットワーク不要で全てPASS)
 - [ ] 生成データと既存の手動データ(現行31地点)を統合、または全面置き換えするかを判断
-- [ ] 生成規模を小(1地方)→中(数地方)→大(全国)と段階的に拡大して動作確認
+      (**要判断**: 実データ生成後に着手)
+- [ ] 生成規模を小(1地方)→中(数地方)→大(全国)と段階的に拡大して実行・動作確認
+      (**要ネットワーク環境**: 上記制約により未実施)
 
 ### Done の定義
-- 実行コマンド一つで `data/*.json` が再生成できる
-- 生成後、孤立地点(どの交通機関接続からも到達不能な地点)が0件であることを
-  検証スクリプトで確認できる
-- 地点数が数百件規模でもゲームがロード・プレイ可能
+- [x] 実行コマンド一つで `data/*.json` が再生成できる(コード上は完成)
+- [x] 生成後、孤立地点・§7.1.1違反が0件であることを検証スクリプトで機械的に確認できる
+- [ ] 地点数が数百件規模の実データで、上記検証が実際にPASSする
+      (ネットワーク制限のない環境での実行待ち)
+- [ ] 地点数が数百件規模でもゲームがロード・プレイ可能(実データでの動作確認待ち)
 
 ---
 
