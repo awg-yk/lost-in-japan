@@ -569,3 +569,80 @@ Node上で高速・決定論的に再現できるようにした位置づけ。
 **教訓**: 「候補を賢く絞り込む」類の変更は、たとえ単体では合理的に見えても、
 既存の「他に候補が残る場合に限って除外する」という詰み防止の設計原則を
 壊していないか、必ずシミュレーションで確認すること。
+
+---
+
+## 13. 追記(2026-07-30 同セッション続き): Phase 1(実データ生成)着手の準備
+
+ユーザーから「実データを追加して観光名所を増やしたい」との依頼があり、
+Phase 1(§1参照、`tools/data_generator.py`)着手の準備を行った。
+
+### 13.1 このサンドボックスはやはり実行不可、trusted環境の存在を確認
+`curl`で`overpass-api.de`への接続を試したところ、プロキシ層で明示的に403が
+返ることを再確認した(`ja.wikipedia.org`・`geocoding.jp`・`en.wikipedia.org`・
+`nominatim.openstreetmap.org`も§12.1で既に403を確認済み)。一方、
+`mcp__Claude_Code_Remote__list_environments`で確認したところ、このユーザーの
+アカウントには**「Default」という「trusted network access」環境**が別に存在する
+ことが分かった(このセッションが動いている環境は、それとは別の制限された環境)。
+ユーザーに確認したところ、「Default環境で新しいセッションを作成し、
+そちらでdata_generator.pyを実行する」方針で進めることになった。
+**このセッション自身には新規セッションを作成するツールが無い**ため、
+ユーザー自身がClaude Code Web/Appの画面から新規セッションを作成する必要がある
+(§13.3に手順を記載)。
+
+### 13.2 実行前に発見・修正した重大な問題: `--merge-with-existing`が未実装だった
+`tools/data_generator.py`のdocstringには
+`python3 tools/data_generator.py --regions all --out data --merge-with-existing`
+という使用例が書かれていたが、実際には`--merge-with-existing`はargparseに
+存在せず(コード側は`--regions`/`--out`/`--cache-dir`/`--seed`/`--blocks-only`/
+`--data`のみ)、そのまま実行するとエラーになる状態だった。さらに、
+`--merge-with-existing`無しで実行した場合の実際の挙動は「`--out`のplaces.json/
+stations.json/connections.json/blockReachability.jsonを完全に上書き」であり、
+今日のセッションで丹念に調整した駅グラフ・経済バランス(§9〜§12)は
+一切保持されない。ユーザーに確認した結果、「26駅・接続グラフは今のまま残し、
+観光名所だけ実データで増やす」方針を選んだため、`--merge-with-existing`を
+正しく実装する代わりに、より安全で用途が明確な**`--places-only`モード**を
+新設した:
+
+- `python3 tools/data_generator.py --places-only --regions <地方> --data data --out data`
+- 既存の`stations.json`(駅・空港・港とその接続)は**読み込み専用**(最寄り駅の
+  割り当てにのみ使う)。書き換えない。
+- Overpass/Wikipediaで取得した観光名所の候補を、既存の`places.json`に
+  マージする(新規追加関数`merge_new_places()`)。以下は重複とみなして除外:
+  同名、既存地点から300m未満の距離、id衝突(既存手動データはid 101〜134)。
+- `blockReachability.json`は座標変化に合わせて再生成する(stations.json由来の
+  座標も含めて計算するが、ファイル自体は書き換えない)。
+- 新規関数`merge_new_places()`は`tools/test_data_generator.py`に5件のユニット
+  テストを追加して検証済み(新規追加/同名重複/近接重複/十分離れていれば追加/
+  id衝突防止)。さらにOverpass/Wikipedia呼び出しをスタブに差し替えた
+  ドライラン(`/tmp`上の実データのコピーに対して実行)で、抽出→重複除外→
+  マージ→書き出し→`validate_data.py`のPASSまで一連の流れを実際に確認済み
+  (このドライランのコード自体はリポジトリには残していない)。
+- `python3 -m unittest discover -s tools -p "test_*.py"`は23件全てPASS。
+
+### 13.3 次のセッション(trusted環境)にやってもらうこと
+1. Claude Code Web/Appで新規セッションを開始し、環境として **Default
+   (trusted network access)** を選ぶ。リポジトリは`awg-yk/journey-home-japan`、
+   ブランチは`claude/game-ui-constraints-fix-e8rjv9`(このセッションと同じ)を
+   checkoutする。
+2. まず1地方だけで試す(例: 関東):
+   ```
+   python3 tools/data_generator.py --places-only --regions kanto --data data --out /tmp/places_test
+   python3 tools/validate_data.py --data /tmp/places_test   # ※事前にstations.jsonをコピーしておくこと
+   ```
+   結果(件数・警告)を見て問題無さそうであれば、`--out data`に変えて本番実行する
+   (`--data data --out data`なら`stations.json`はそのまま、`places.json`と
+   `blockReachability.json`だけが更新される)。
+3. 全地方(`--regions all`)で本実行し、`python3 tools/validate_data.py --data data`
+   で最終確認。
+4. `npm test`(Node側のゲームロジックテスト)と
+   `python3 -m unittest discover -s tools -p "test_*.py"`の両方がPASSすることを
+   確認してからコミット・プッシュする。
+5. 観光名所が大幅に増えることで、Phase3のバランス調整(§10・§11で行った
+   `WORK_MAX_PER_NODE`・難易度別初期所持金等の調整)の前提(24地点・26駅)が
+   変わるため、`node tools/balance_harness.js --seeds 1000`で再計測し、
+   極端な悪化が無いか確認することを推奨する(問題なければそのままでよい。
+   Phase1のデータ拡張で自然に改善する可能性が高いとこれまでのセッションで
+   予想されていた通りの結果になるか確認する意味合い)。
+6. 完了したらこのセッション(または元のブランチ)に戻り、結果を踏まえて
+   HANDOFF.md/PHASE_PLAN.mdのPhase1チェックリストを更新すること。

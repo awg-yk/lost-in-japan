@@ -19,6 +19,7 @@ from data_generator import (
     ensure_place_station_coverage,
     grid_key,
     is_bridge_edge,
+    merge_new_places,
 )
 
 
@@ -168,6 +169,52 @@ class EnsurePlaceStationCoverageTests(unittest.TestCase):
         stations = {1: {'name': 'テスト駅', 'lat': 35.0, 'lng': 135.0}}
         warnings = ensure_place_station_coverage(places, stations, max_distance_km=60)
         self.assertEqual(len(warnings), 1)
+
+
+class MergeNewPlacesTests(unittest.TestCase):
+    """2026-07-30追加: --places-only モード(観光名所だけを既存データにマージする)の
+    重複除外ロジックを検証する。"""
+
+    def test_new_place_is_added(self):
+        existing = [{'id': 101, 'name': '既存地点', 'lat': 35.0, 'lng': 135.0}]
+        new = [{'id': 999001, 'name': '新規地点', 'lat': 40.0, 'lng': 140.0}]
+        merged, added, skipped = merge_new_places(new, existing)
+        self.assertEqual(added, 1)
+        self.assertEqual(skipped, 0)
+        self.assertEqual(len(merged), 2)
+
+    def test_same_name_is_treated_as_duplicate(self):
+        existing = [{'id': 101, 'name': '清水寺', 'lat': 34.9948, 'lng': 135.7847}]
+        new = [{'id': 999001, 'name': '清水寺', 'lat': 34.9950, 'lng': 135.7850}]
+        merged, added, skipped = merge_new_places(new, existing)
+        self.assertEqual(added, 0)
+        self.assertEqual(skipped, 1)
+        self.assertEqual(len(merged), 1)
+
+    def test_nearby_different_name_is_treated_as_duplicate(self):
+        # 既存地点からmin_distance_km未満に位置する候補は、別名でも同一地点とみなす
+        # (Overpassのタグ表記揺れ等で同じ場所が別名候補として出てくる場合に対応)。
+        existing = [{'id': 101, 'name': '清水寺', 'lat': 35.0, 'lng': 135.0}]
+        new = [{'id': 999001, 'name': '清水寺(本堂)', 'lat': 35.0005, 'lng': 135.0005}]
+        merged, added, skipped = merge_new_places(new, existing, min_distance_km=0.3)
+        self.assertEqual(added, 0)
+        self.assertEqual(skipped, 1)
+
+    def test_far_enough_different_name_is_added(self):
+        existing = [{'id': 101, 'name': '清水寺', 'lat': 35.0, 'lng': 135.0}]
+        new = [{'id': 999001, 'name': '伏見稲荷大社', 'lat': 35.05, 'lng': 135.05}]
+        merged, added, skipped = merge_new_places(new, existing, min_distance_km=0.3)
+        self.assertEqual(added, 1)
+        self.assertEqual(skipped, 0)
+
+    def test_id_collision_with_existing_manual_data_is_skipped(self):
+        # 既存の手動データ(id 101〜134)とOSMの生idが万一衝突した場合の安全策。
+        existing = [{'id': 132, 'name': '熊本城', 'lat': 32.8065, 'lng': 130.7055}]
+        new = [{'id': 132, 'name': '別の何か(id衝突)', 'lat': 10.0, 'lng': 10.0}]
+        merged, added, skipped = merge_new_places(new, existing)
+        self.assertEqual(added, 0)
+        self.assertEqual(skipped, 1)
+        self.assertEqual(len(merged), 1)
 
 
 if __name__ == '__main__':

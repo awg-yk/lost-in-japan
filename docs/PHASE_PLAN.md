@@ -45,6 +45,14 @@
 > ```
 > `--cache-dir`(デフォルト`tools/.cache`)にOverpass/Wikipediaの応答をキャッシュするので、
 > 二回目以降の再実行や地方追加時は既存キャッシュがあれば再取得されない。
+>
+> **2026-07-30追記**: 駅・接続グラフ(26駅)と経済バランス(Phase3)を保ったまま
+> 観光名所だけ実データで増やしたい場合は、上記の代わりに`--places-only`モードを使う
+> (docs/HANDOFF.md §13参照)。`stations.json`/`connections.json`には一切手を付けない:
+> ```
+> python3 tools/data_generator.py --places-only --regions kanto --data data --out /tmp/test_kanto
+> python3 tools/data_generator.py --places-only --regions all --data data --out data
+> ```
 
 ### タスク
 - [x] 地方単位(8地方、`REGION_BBOXES`)でbboxを分割して実行するバッチ処理を実装

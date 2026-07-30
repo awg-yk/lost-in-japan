@@ -10,8 +10,15 @@ Step6: JSON出力 (places.json / stations.json / connections.json)
 Step7: blockReachability.json を生成
 
 使い方:
-    python3 tools/data_generator.py --regions kanto,kansai --out data
-    python3 tools/data_generator.py --regions all --out data --merge-with-existing
+    通常モード(駅・接続グラフも含めて全面生成。既存data/*.jsonは上書きされる):
+        python3 tools/data_generator.py --regions kanto,kansai --out data
+
+    観光名所だけ追加モード(2026-07-30追加。--places-only):
+        python3 tools/data_generator.py --places-only --regions kanto,kansai --data data --out data
+        既存のstations.json(駅・空港・港とその接続)は一切書き換えず読み込み専用として使い、
+        Overpass/Wikipediaで取得した観光名所だけを既存のplaces.jsonにマージして書き出す
+        (同名または既存地点から近すぎる候補は重複として除外)。手動で調整した駅グラフや
+        経済バランスを保ったまま、観光名所の件数だけを実データで増やしたい場合に使う。
 
     ネットワーク制限のある環境(このリポジトリのCI/開発サンドボックス等)では
     Overpass API (overpass-api.de) / Wikipedia API (ja.wikipedia.org) への
@@ -383,6 +390,109 @@ def ensure_place_station_coverage(places, stations, max_distance_km=60):
     return warnings
 
 
+def merge_new_places(new_places, existing_places, min_distance_km=0.3):
+    """2026-07-30追加: 新規取得した観光地点を既存のplaces.jsonにマージする。
+    同名、または既存地点からmin_distance_km未満の距離にある候補は重複とみなして
+    除外する(手動データとOverpassデータで同じ場所が二重に登録されるのを防ぐ)。
+    idの衝突(既存の手動id 101〜134とOSMの生idが万一衝突する場合)も念のため除外する。
+    戻り値: (マージ後のリスト, 追加件数, 重複スキップ件数)"""
+    existing_ids = {p['id'] for p in existing_places}
+    existing_names = {p['name'] for p in existing_places}
+    existing_coords = [(p['lat'], p['lng']) for p in existing_places]
+
+    merged = list(existing_places)
+    added, skipped = 0, 0
+    for p in new_places:
+        is_duplicate = (
+            p['id'] in existing_ids
+            or p['name'] in existing_names
+            or any(haversine_km(p['lat'], p['lng'], lat, lng) < min_distance_km for lat, lng in existing_coords)
+        )
+        if is_duplicate:
+            skipped += 1
+            continue
+        merged.append(p)
+        existing_ids.add(p['id'])
+        existing_names.add(p['name'])
+        existing_coords.append((p['lat'], p['lng']))
+        added += 1
+    return merged, added, skipped
+
+
+def generate_places_only(region_names, cache, rng, data_dir, out_dir):
+    """2026-07-30追加: 駅・接続グラフ(stations.json)には一切手を付けず、
+    観光名所(places.json)だけをOverpass/Wikipediaの実データで追加する安全なモード。
+    手動で調整済みの駅グラフ・経済バランス(Phase3参照)を壊さずに、観光名所の
+    件数・多様性だけを増やしたい場合に使う。"""
+    data_dir = Path(data_dir)
+    existing_places = json.loads((data_dir / 'places.json').read_text(encoding='utf-8'))['places']
+    existing_stations_list = json.loads((data_dir / 'stations.json').read_text(encoding='utf-8'))['nodes']
+    stations = {s['id']: s for s in existing_stations_list}
+
+    all_elements = []
+    for region in region_names:
+        if region not in REGION_BBOXES:
+            print(f'未知の地方名: {region} (利用可能: {", ".join(REGION_BBOXES.keys())})', file=sys.stderr)
+            continue
+        all_elements.extend(fetch_region_elements(region, REGION_BBOXES[region], cache))
+
+    new_places = []
+    for el in all_elements:
+        tags = el.get('tags', {})
+        if 'lat' not in el or 'lon' not in el:
+            continue
+        if classify_transport_type(tags):
+            continue  # 駅・空港・港は既存stations.jsonのまま変更しないため無視する
+        place_type = classify_place_type(tags)
+        if not place_type:
+            continue
+        name = tags.get('name', f"place_{el['id']}")
+        has_wiki, wiki_len = fetch_wikipedia_info(name, cache)
+        score = compute_discovery_score(
+            place_type, has_wiki, wiki_len, el['lat'], el['lon'],
+            osm_tag_count=len(tags), has_image_tag=('image' in tags or 'wikimedia_commons' in tags), rng=rng,
+        )
+        new_places.append({
+            'id': el['id'], 'name': name, 'type': place_type, 'lat': el['lat'], 'lng': el['lon'],
+            'discoveryScore': score, 'reward': compute_reward(score),
+            'officialUrl': tags.get('website', ''),
+            'wikipediaUrl': f'https://ja.wikipedia.org/wiki/{urllib.parse.quote(name)}' if has_wiki else '',
+            'gridKey': grid_key(el['lat'], el['lon']), 'hasWikipedia': has_wiki, 'wikipediaLength': wiki_len,
+            'nearestStationId': None,
+        })
+
+    print(f'抽出: 観光地点候補 {len(new_places)}件(駅・空港・港はstations.json側を維持するため対象外)')
+
+    # 新設駅は作らず、既存の(手動調整済みの)駅の中から最寄りを割り当てる。
+    warnings = ensure_place_station_coverage(new_places, stations)
+    for w in warnings:
+        print(f'[警告] {w}', file=sys.stderr)
+
+    merged_places, added, skipped = merge_new_places(new_places, existing_places)
+    print(f'マージ結果: 新規追加 {added}件 / 重複スキップ {skipped}件 / 合計 {len(merged_places)}件')
+
+    errors = validate_places(merged_places)
+    if errors:
+        print('検証エラーのため出力を中止しました:', file=sys.stderr)
+        for e in errors:
+            print(f'  - {e}', file=sys.stderr)
+        raise SystemExit(1)
+
+    out_dir = Path(out_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    (out_dir / 'places.json').write_text(json.dumps({'places': merged_places}, ensure_ascii=False, indent=2), encoding='utf-8')
+
+    # stations.json/connections.jsonは意図的に読み込みのみで書き換えない
+    # (既存の駅グラフ・経済バランスを保つのがこのモードの目的のため)。
+    all_latlngs = [(p['lat'], p['lng']) for p in merged_places] + [(s['lat'], s['lng']) for s in existing_stations_list]
+    block_reach = generate_block_reachability(all_latlngs)
+    (out_dir / 'blockReachability.json').write_text(json.dumps(block_reach, ensure_ascii=False, indent=2), encoding='utf-8')
+    print(f'書き出し完了: {out_dir}/places.json (合計{len(merged_places)}件), '
+          f'{out_dir}/blockReachability.json を再生成しました。'
+          f'(stations.json/connections.jsonは変更していません)')
+    return warnings
+
+
 # ---------------------------------------------------------------------------
 # Step5: 発見スコア(§4.1)
 # ---------------------------------------------------------------------------
@@ -518,7 +628,11 @@ def main():
                          help='Overpass/Wikipediaを呼ばず、--data(デフォルト--outと同じ)の既存'
                               'places.json/stations.jsonからblockReachability.jsonだけを再生成する'
                               '(ネットワーク不要)')
-    parser.add_argument('--data', default=None, help='--blocks-only時の読み込み元(デフォルトは--outと同じ)')
+    parser.add_argument('--places-only', action='store_true',
+                         help='駅・接続グラフ(stations.json/connections.json)には一切手を付けず、'
+                              '既存のplaces.json(--data、デフォルト--outと同じ)に観光名所だけを'
+                              'Overpass/Wikipediaのデータでマージ追加する(2026-07-30追加)')
+    parser.add_argument('--data', default=None, help='--blocks-only/--places-only時の読み込み元(デフォルトは--outと同じ)')
     args = parser.parse_args()
 
     if args.blocks_only:
@@ -529,6 +643,7 @@ def main():
         print('--regions が指定されていません。実行例:')
         print('  python3 tools/data_generator.py --regions kanto,kansai --out data')
         print('  python3 tools/data_generator.py --regions all --out data')
+        print('  python3 tools/data_generator.py --places-only --regions kanto,kansai --data data --out data')
         print('地方一覧:', ', '.join(REGION_BBOXES.keys()))
         print()
         print('このサンドボックス環境では overpass-api.de / ja.wikipedia.org への')
@@ -541,6 +656,10 @@ def main():
 
     region_names = list(REGION_BBOXES.keys()) if args.regions == 'all' else [r.strip() for r in args.regions.split(',')]
     cache = Cache(args.cache_dir)
+
+    if args.places_only:
+        generate_places_only(region_names, cache, rng, args.data or args.out, args.out)
+        return
 
     all_elements = []
     for region in region_names:
