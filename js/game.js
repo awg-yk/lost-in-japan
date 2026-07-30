@@ -27,9 +27,11 @@ const EAT_HUNGER_GAIN = 45;
 const REST_COST = 150;
 const REST_STAMINA_GAIN = 45;
 
-// アルバイト: 交通ノード(駅・空港・港)でのみ働ける。旅の資金稼ぎの手段として
-// 同一ノードでも繰り返し働けるようにしてあるが、無制限だと詰み回避に頼らず
-// 同じ場所で稼ぎ続けられてしまうため、同一ノードにつき最大3回までに制限する。
+// アルバイト: 観光名所(地点データ)でのみ働ける(2026-07-30変更。旧仕様では
+// 駅・空港・港でも働けたが、それだと寄り道せず稼げてしまい「旅先の発見」という
+// 目的に反するため、観光名所限定にした)。旅の資金稼ぎの手段として同一ノードでも
+// 繰り返し働けるようにしてあるが、無制限だと詰み回避に頼らず同じ場所で稼ぎ続け
+// られてしまうため、同一ノードにつき最大3回までに制限する。
 // また、空腹・体力のどちらかが0の状態では働けない(力尽きた状態での労働を禁止)。
 const WORK_WAGE = 1000;
 const WORK_HUNGER_COST = 8;
@@ -250,11 +252,19 @@ const Game = {
     return null;
   },
 
-  // 食事・アルバイトとも、現在地が交通ノード(駅・空港・港)であることを前提とする
+  // 食事・温泉は、現在地が交通ノード(駅・空港・港)であることを前提とする
   // (§実装時の裁量: 本来は地点ごとの実際の飲食店・温泉データに応じるべきだが、
   // 実データ整備前の暫定として、駅・空港であれば一律に利用できることにしている)。
+  // アルバイトは観光名所側の条件(atSightseeingPlace)を使うため対象外。
   atTransportNode() {
     return this.state.currentNodeType === 'transport';
+  },
+
+  // アルバイトができるのは観光名所(地点データ、`currentNodeType === 'place'`)のみ。
+  // 駅・空港でも働けてしまうと寄り道せずに稼げてしまい、「旅先の発見」という
+  // ゲームの目的に反するため(2026-07-30、ユーザー指示による変更)。
+  atSightseeingPlace() {
+    return this.state.currentNodeType === 'place';
   },
 
   canAffordEat() {
@@ -287,16 +297,18 @@ const Game = {
     return { ok: true, message: `温泉に入って体力を回復した(¥${REST_COST})。` };
   },
 
-  // アルバイト: 交通ノード(駅・空港・港)であれば働けるが、以下の2条件で制限する。
+  // アルバイト: 観光名所(地点データ)であれば働けるが、以下の条件で制限する。
+  //   - 駅・空港・港(交通ノード)では働けない(寄り道して観光名所を
+  //     訪れる動機付けのため。2026-07-30変更、旧仕様では交通ノードで働けた)。
   //   - 空腹・体力のどちらかが0のときは働けない(力尽きた状態での労働を禁止)。
   //   - 同一ノードでの労働回数はWORK_MAX_PER_NODE(3回)まで。
   canWork() {
-    if (!this.atTransportNode()) return false;
+    if (!this.atSightseeingPlace()) return false;
     if (this.state.hunger <= 0 || this.state.stamina <= 0) return false;
     return this.workCountAtCurrentNode() < WORK_MAX_PER_NODE;
   },
 
-  // 現在地(交通ノード)で、これまでに何回アルバイトしたか。
+  // 現在地(観光名所)で、これまでに何回アルバイトしたか。
   workCountAtCurrentNode() {
     const id = this.state.currentNodeId;
     return this.state.workedIds.filter(workedId => workedId === id).length;
