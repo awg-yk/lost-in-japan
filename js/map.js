@@ -46,7 +46,7 @@ const MapView = {
   showCandidatePreview(fromNode, toNode) {
     this.previewLayer.clearLayers();
     L.polyline([[fromNode.lat, fromNode.lng], [toNode.lat, toNode.lng]], {
-      color: '#FFE066', weight: 5, opacity: 0.95, dashArray: '2, 10', lineCap: 'round',
+      color: '#1E90FF', weight: 5, opacity: 0.95, dashArray: '2, 10', lineCap: 'round',
     }).addTo(this.previewLayer);
     L.marker([toNode.lat, toNode.lng], {
       icon: L.divIcon({ className: 'candidate-preview-marker', html: '<div class="candidate-preview-pulse"></div>', iconSize: [34, 34], iconAnchor: [17, 17] }),
