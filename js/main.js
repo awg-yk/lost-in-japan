@@ -145,6 +145,7 @@ function buildRestCard() {
 function renderCandidates() {
   const list = document.getElementById('candidate-list');
   list.innerHTML = '';
+  MapView.clearCandidatePreview();
   const candidates = Game.getCandidates();
   const canWork = Game.canWork();
   const canEat = Game.canAffordEat();
@@ -174,6 +175,15 @@ function renderCandidates() {
       </div>
     `;
     card.addEventListener('click', () => onChooseCandidate(c));
+
+    // カーソルを合わせている間、現在地→候補地の直線と候補地点を地図上で強調表示する。
+    const targetNode = c.targetType === 'place' ? Game.data.placesById.get(c.targetId) : Game.data.stationsById.get(c.targetId);
+    const currentNode = Game.currentNode();
+    if (targetNode && currentNode) {
+      card.addEventListener('mouseenter', () => MapView.showCandidatePreview(currentNode, targetNode));
+      card.addEventListener('mouseleave', () => MapView.clearCandidatePreview());
+    }
+
     list.appendChild(card);
   });
 }
@@ -200,6 +210,7 @@ function onRest() {
 }
 
 function onChooseCandidate(candidate) {
+  MapView.clearCandidatePreview();
   const result = Game.chooseCandidate(candidate);
   toast(result.message);
   renderHud();

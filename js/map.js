@@ -22,6 +22,7 @@ const MapView = {
   currentMarker: null,
   destinationMarker: null,
   routeLayer: null,
+  previewLayer: null,
 
   init() {
     this.map = L.map('map', { zoomControl: true, attributionControl: true }).setView([36.5, 138.0], 5);
@@ -31,6 +32,39 @@ const MapView = {
     }).addTo(this.map);
     this.visitedLayer = L.layerGroup().addTo(this.map);
     this.routeLayer = L.layerGroup().addTo(this.map);
+    // 候補カードにカーソルを合わせた際、現在地→候補地の直線と候補地点を
+    // 一時的に強調表示するための専用レイヤー(routeLayerとは別に管理し、
+    // 到着後のルート表示と競合しないようにする)。
+    this.previewLayer = L.layerGroup().addTo(this.map);
+  },
+
+  // 現在地から候補地までの直線と、候補地点そのものを目立つ見た目で表示する。
+  // ホバーのたびに呼ばれる想定なので、まず前回分をクリアしてから描画する。
+  // 鉄道・飛行機等の候補は現在の表示範囲から大きく外れていることが多いため、
+  // 両地点が収まるように地図を軽くパン/ズームする(候補パネルに隠れないよう
+  // 下側に余白を多めに取る)。
+  showCandidatePreview(fromNode, toNode) {
+    this.previewLayer.clearLayers();
+    L.polyline([[fromNode.lat, fromNode.lng], [toNode.lat, toNode.lng]], {
+      color: '#FFE066', weight: 5, opacity: 0.95, dashArray: '2, 10', lineCap: 'round',
+    }).addTo(this.previewLayer);
+    L.marker([toNode.lat, toNode.lng], {
+      icon: L.divIcon({ className: 'candidate-preview-marker', html: '<div class="candidate-preview-pulse"></div>', iconSize: [34, 34], iconAnchor: [17, 17] }),
+      interactive: false,
+    }).addTo(this.previewLayer);
+
+    const bounds = L.latLngBounds([[fromNode.lat, fromNode.lng], [toNode.lat, toNode.lng]]);
+    const mapSize = this.map.getSize();
+    this.map.flyToBounds(bounds, {
+      paddingTopLeft: [24, 90],
+      paddingBottomRight: [24, Math.round(mapSize.y * 0.42)],
+      maxZoom: 13,
+      duration: 0.35,
+    });
+  },
+
+  clearCandidatePreview() {
+    if (this.previewLayer) this.previewLayer.clearLayers();
   },
 
   setDestination(node) {
