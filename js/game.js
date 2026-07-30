@@ -1,15 +1,24 @@
-// game.js — ゲーム状態管理(所持金・空腹・喉の渇き・発見済み等)(§4,§7,§8)
+// game.js — ゲーム状態管理(所持金・空腹・体力・発見済み等)(§4,§7,§8)
 
 const INITIAL_MONEY = 5000;
+// 空腹は移動時間の目安として全ての移動手段で減少する。
+// 体力は「歩いた」ことによる身体的消耗のみで減少する(電車や飛行機に乗っている間は消耗しない)。
 const HUNGER_DECAY_PER_KM = 0.06;
-const THIRST_DECAY_PER_KM = 0.08;
+const STAMINA_DECAY_PER_KM_WALK = 1.1;
 const HITCHHIKE_FAIL_HUNGER_COST = 3;
-const HITCHHIKE_FAIL_THIRST_COST = 4;
+const HITCHHIKE_FAIL_STAMINA_COST = 4;
 
 const EAT_COST = 300;
 const EAT_HUNGER_GAIN = 45;
-const DRINK_COST = 150;
-const DRINK_THIRST_GAIN = 45;
+const REST_COST = 150;
+const REST_STAMINA_GAIN = 45;
+
+// アルバイト: 交通ノード(駅・空港・港)でのみ、同一ノードにつき1回だけ働ける。
+const WORK_HUNGER_COST = 8;
+const WORK_STAMINA_COST = 15;
+function workWage(node) {
+  return 300 + Math.round((node.discoveryScore || 0) * 3);
+}
 
 const RANDOM_EVENT_CHANCE = 0.25;
 // Phase3: §7.3の例(お金を拾う/地域グルメ/珍しい発見/地元イベント/ヒッチハイク成功)
@@ -20,8 +29,8 @@ const RANDOM_EVENTS = [
   { weight: 3, apply: () => { Game.state.hunger = Math.min(100, Game.state.hunger + 20); return '地元のグルメを味見して、少しお腹が満たされた。'; } },
   { weight: 2, apply: () => { const bonus = 50 + Math.floor(Math.random() * 100); Game.state.money += bonus; return `珍しいものを見つけてちょっとした収入(¥${bonus})になった。`; } },
   { weight: 2, apply: () => '地元のイベントに遭遇した。旅の思い出が一つ増えた。' },
-  { weight: 3, apply: () => { Game.state.thirst = Math.min(100, Game.state.thirst + 15); return '自販機でおまけの一本が出てきた。少し喉が潤った。'; } },
-  { weight: 2, apply: () => { Game.state.hunger = Math.min(100, Game.state.hunger + 10); Game.state.thirst = Math.min(100, Game.state.thirst + 10); return '地元の人に手土産をもらった。'; } },
+  { weight: 3, apply: () => { Game.state.stamina = Math.min(100, Game.state.stamina + 15); return 'ベンチで少し休ませてもらい、体力が少し回復した。'; } },
+  { weight: 2, apply: () => { Game.state.hunger = Math.min(100, Game.state.hunger + 10); Game.state.stamina = Math.min(100, Game.state.stamina + 10); return '地元の人に手土産をもらった。'; } },
   { weight: 2, apply: () => { const discount = 100 + Math.floor(Math.random() * 200); Game.state.money += discount; return `お得な情報を教えてもらい、¥${discount}分お得になった。`; } },
   { weight: 1, apply: () => '道端で野生の生き物に遭遇した。旅の良い思い出になった。' },
 ];
@@ -70,7 +79,7 @@ const Game = {
       destinationId,
       money: INITIAL_MONEY,
       hunger: 100,
-      thirst: 100,
+      stamina: 100,
       visitedIds: [],
       discoveredIds: [],
       moveHistory: [],
@@ -93,7 +102,9 @@ const Game = {
       destinationId: saved.destinationId,
       money: saved.money,
       hunger: saved.hunger,
-      thirst: saved.thirst,
+      // stamina は旧バージョンの thirst を置き換えたフィールド。
+      // 旧セーブデータ(thirstのみ持つ)を読み込んだ場合のフォールバックを用意しておく。
+      stamina: saved.stamina !== undefined ? saved.stamina : (saved.thirst !== undefined ? saved.thirst : 100),
       visitedIds: saved.visitedIds || [],
       discoveredIds: saved.discoveredIds || [],
       moveHistory: saved.moveHistory || [],
@@ -138,7 +149,7 @@ const Game = {
       destinationNode: this.destinationNode(),
       money: this.state.money,
       hunger: this.state.hunger,
-      thirst: this.state.thirst,
+      stamina: this.state.stamina,
       spatialIndex: this.data.spatialIndex,
       stationsById: this.data.stationsById,
       placesById: this.data.placesById,
@@ -160,7 +171,7 @@ const Game = {
       const success = Math.random() < candidate.successRate;
       if (!success) {
         s.hunger = Math.max(0, s.hunger - HITCHHIKE_FAIL_HUNGER_COST);
-        s.thirst = Math.max(0, s.thirst - HITCHHIKE_FAIL_THIRST_COST);
+        s.stamina = Math.max(0, s.stamina - HITCHHIKE_FAIL_STAMINA_COST);
         Save.write(s);
         return { ok: false, message: 'ヒッチハイクは失敗した…足止めをくらった。', arrived: false };
       }
@@ -169,8 +180,12 @@ const Game = {
       s.money -= candidate.cost;
     }
 
+    // 空腹は移動手段によらず(移動時間の目安として)減少するが、
+    // 体力は徒歩による身体的消耗としてのみ減少する。
     s.hunger = Math.max(0, s.hunger - candidate.distanceKm * HUNGER_DECAY_PER_KM);
-    s.thirst = Math.max(0, s.thirst - candidate.distanceKm * THIRST_DECAY_PER_KM);
+    if (candidate.mode === 'walk') {
+      s.stamina = Math.max(0, s.stamina - candidate.distanceKm * STAMINA_DECAY_PER_KM_WALK);
+    }
     s.totalDistanceKm += candidate.distanceKm;
 
     s.currentNodeId = candidate.targetId;
@@ -216,12 +231,32 @@ const Game = {
     return { ok: true, message: `食事をとった(¥${EAT_COST})。` };
   },
 
-  drink() {
-    if (this.state.money < DRINK_COST) return { ok: false, message: '所持金が足りません。' };
-    this.state.money -= DRINK_COST;
-    this.state.thirst = Math.min(100, this.state.thirst + DRINK_THIRST_GAIN);
+  rest() {
+    if (this.state.money < REST_COST) return { ok: false, message: '所持金が足りません。' };
+    this.state.money -= REST_COST;
+    this.state.stamina = Math.min(100, this.state.stamina + REST_STAMINA_GAIN);
     Save.write(this.state);
-    return { ok: true, message: `水分補給をした(¥${DRINK_COST})。` };
+    return { ok: true, message: `休憩して体力を回復した(¥${REST_COST})。` };
+  },
+
+  // アルバイト: 現在地が交通ノード(駅・空港・港)で、かつそのノードでまだ
+  // 働いたことが無い場合のみ実行できる(§実装時の裁量: 稼ぐ手段が乏しいという
+  // フィードバックを受けて追加。同一ノードでの連続稼ぎを防ぐため1回限り)。
+  canWork() {
+    const s = this.state;
+    return s.currentNodeType === 'transport' && !s.workedIds.includes(s.currentNodeId);
+  },
+
+  work() {
+    if (!this.canWork()) return { ok: false, message: 'ここでは既に働いたか、働ける場所ではありません。' };
+    const node = this.currentNode();
+    const wage = workWage(node);
+    this.state.money += wage;
+    this.state.workedIds.push(this.state.currentNodeId);
+    this.state.hunger = Math.max(0, this.state.hunger - WORK_HUNGER_COST);
+    this.state.stamina = Math.max(0, this.state.stamina - WORK_STAMINA_COST);
+    Save.write(this.state);
+    return { ok: true, message: `${node.name}でアルバイトして ¥${wage.toLocaleString()} 稼いだ。` };
   },
 
   tickPlayTime() {
@@ -248,4 +283,6 @@ const Game = {
 
 window.Game = Game;
 window.EAT_COST = EAT_COST;
-window.DRINK_COST = DRINK_COST;
+window.REST_COST = REST_COST;
+window.HUNGER_DECAY_PER_KM = HUNGER_DECAY_PER_KM;
+window.STAMINA_DECAY_PER_KM_WALK = STAMINA_DECAY_PER_KM_WALK;

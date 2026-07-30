@@ -28,7 +28,7 @@ const Save = {
       moveHistory: state.moveHistory,
       playTimeSec: state.playTimeSec,
       hunger: state.hunger,
-      thirst: state.thirst,
+      stamina: state.stamina,
       totalDistanceKm: state.totalDistanceKm,
       workedIds: state.workedIds,
       startId: state.startId,

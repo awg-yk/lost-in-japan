@@ -223,14 +223,14 @@ function recentPenalty(targetId, targetType, recentNodeIds) {
   return 0;
 }
 
-// 現在地点・所持金・空腹/喉の状態から移動候補を生成し、上位のみ返す(§6.2,§6.3,§6.4)。
+// 現在地点・所持金・空腹/体力の状態から移動候補を生成し、上位のみ返す(§6.2,§6.3,§6.4)。
 function generateCandidates(ctx) {
   const {
-    currentNode, destinationNode, money, hunger, thirst,
+    currentNode, destinationNode, money, hunger, stamina,
     spatialIndex, stationsById, placesById, discoveredIds, recentNodeIds,
   } = ctx;
 
-  const lowStat = hunger <= 0 || thirst <= 0;
+  const lowStat = hunger <= 0 || stamina <= 0;
   const walkRadius = lowStat ? WALK_RADIUS_KM_LOW_STAT : WALK_RADIUS_KM_DEFAULT;
   const discoveredSet = new Set(discoveredIds);
   const candidates = [];

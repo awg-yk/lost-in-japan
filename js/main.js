@@ -82,7 +82,16 @@ function renderHud() {
   document.getElementById('stat-money').textContent = fmtMoney(s.money);
   document.getElementById('stat-time').textContent = fmtTime(s.playTimeSec);
   document.getElementById('gauge-hunger').style.width = s.hunger + '%';
-  document.getElementById('gauge-thirst').style.width = s.thirst + '%';
+  document.getElementById('gauge-stamina').style.width = s.stamina + '%';
+  updateWorkButton();
+}
+
+function updateWorkButton() {
+  const btn = document.getElementById('btn-work');
+  if (!Game.state) return;
+  const already = Game.state.currentNodeType === 'transport' && Game.state.workedIds.includes(Game.state.currentNodeId);
+  btn.disabled = !Game.canWork();
+  btn.textContent = already ? '勤務済み' : 'アルバイト';
 }
 
 function candidateMetaText(c) {
@@ -97,26 +106,38 @@ function candidateMetaText(c) {
   return parts.join(' ・ ');
 }
 
+// 徒歩の場合のみ、移動すると空腹/体力がどれだけ減るかを事前に見せる
+// (体力は徒歩による消耗のみ発生するため、徒歩以外では表示しない)。
+function candidatePreviewText(c) {
+  if (c.mode !== 'walk') return '';
+  const hungerLoss = Math.round(c.distanceKm * window.HUNGER_DECAY_PER_KM);
+  const staminaLoss = Math.round(c.distanceKm * window.STAMINA_DECAY_PER_KM_WALK);
+  const fmt = (n) => (n > 0 ? `-${n}` : '0');
+  return `空腹 ${fmt(hungerLoss)} ・ 体力 ${fmt(staminaLoss)}`;
+}
+
 function renderCandidates() {
   const list = document.getElementById('candidate-list');
   list.innerHTML = '';
   const candidates = Game.getCandidates();
 
   if (candidates.length === 0) {
-    list.innerHTML = '<div class="candidate-meta">近くに移動できる場所が見つかりません。食事・水分補給をしてから、再度お試しください。</div>';
+    list.innerHTML = '<div class="candidate-meta">近くに移動できる場所が見つかりません。食事・休憩をしてから、再度お試しください。</div>';
     return;
   }
 
   candidates.forEach(c => {
     const card = document.createElement('button');
     card.className = 'candidate-card';
+    const preview = candidatePreviewText(c);
     card.innerHTML = `
+      <div class="candidate-cost">${c.cost > 0 ? `<span class="cost-label">運賃</span>${fmtMoney(c.cost)}` : '無料'}</div>
       <div class="candidate-icon">${MODE_ICON[c.mode] || '📍'}</div>
       <div class="candidate-body">
         <div class="candidate-name">${c.targetName}${c.isNew ? '<span class="new-badge">未発見</span>' : ''}</div>
         <div class="candidate-meta">${candidateMetaText(c)}</div>
+        ${preview ? `<div class="candidate-preview">${preview}</div>` : ''}
       </div>
-      <div class="candidate-cost">${c.cost > 0 ? `<span class="cost-label">運賃</span>${fmtMoney(c.cost)}` : '無料'}</div>
     `;
     card.addEventListener('click', () => onChooseCandidate(c));
     list.appendChild(card);
@@ -211,8 +232,14 @@ function setupHudActions() {
     renderHud();
     if (r.ok) renderCandidates();
   });
-  document.getElementById('btn-drink').addEventListener('click', () => {
-    const r = Game.drink();
+  document.getElementById('btn-rest').addEventListener('click', () => {
+    const r = Game.rest();
+    toast(r.message);
+    renderHud();
+    if (r.ok) renderCandidates();
+  });
+  document.getElementById('btn-work').addEventListener('click', () => {
+    const r = Game.work();
     toast(r.message);
     renderHud();
     if (r.ok) renderCandidates();
