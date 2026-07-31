@@ -144,6 +144,16 @@ button.secondary{
   font-size:11px; padding:8px 12px; border-radius:20px;
 }
 
+/* 駅サガース風「最寄り駅ボロノイ」表示トグル(js/map.js VoronoiLayer が制御) */
+#fab-voronoi{
+  position:absolute; right:12px; bottom: calc(38vh + 52px); z-index:1000;
+  background: rgba(17,28,43,0.9); border:1px solid var(--panel-border); color:var(--text-sub);
+  font-size:11px; padding:8px 12px; border-radius:20px;
+}
+#fab-voronoi.active{
+  background: rgba(30,144,255,0.35); border-color:#1E90FF; color:#fff;
+}
+
 #loading{
   position:absolute; inset:0; z-index:2000; background:#0b1420; color:var(--text-sub);
   display:flex; align-items:center; justify-content:center; font-size:14px; text-align:center; padding:24px;

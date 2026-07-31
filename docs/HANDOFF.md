@@ -825,3 +825,41 @@ Agentを3並列(各35駅担当)でバックグラウンド起動。完了した3
 - Playwrightでの実ブラウザ確認 → `placesById.size===94`,
   `stationsById.size===131`、候補カード正常表示、JSエラーなし(地図タイル
   ブロックによるネットワークエラーのみ、既知の仕様)
+
+---
+
+## 全国駅データ統合 (2026-07-31, station_database インポート)
+
+`tools/import_station_database.mjs` を新規追加し、`Seo-4d696b75/station_database`
+(CC BY 4.0、駅メモ！データ準拠、駅サガースと同じデータソース)から全国駅データを
+取り込んで `data/stations.json` を手動131ノードから全国8988駅規模に置き換えた。
+
+### 主な設計判断
+
+- **register.csv と station.json の対応関係**: `register.csv` の `station_code` 列は
+  `station.json` の `id` ではなく `code` フィールドと対応することを実データで確認した
+  (例: station_code=100201/100202/100203/100204 → 東海道新幹線の 東京/品川/新横浜/小田原、
+  station.jsonの`code`と一致)。この対応で路線ごとの駅並び順(`index`)から隣接駅ペアを
+  復元し、鉄道接続(rail edge)とした。
+- **孤立ノード防止**: register.csv由来の接続だけでは31個の連結成分に分かれた
+  (支線や登録データの欠損などが原因)。`tools/data_generator.py`の
+  `bridge_disconnected_components`と同じ考え方で、最大成分から最も近い成分へ
+  最近傍駅同士を橋渡し接続する処理を30回繰り返し、最終的に全8988駅が単一連結成分になる
+  ことをBFS検証で確認済み。
+- **廃駅の除外**: `station.json`の`closed:true`(384件)は取り込み対象から除外。
+- **ボロノイ**: `voronoi`はPolygonのほかごく少数(17件)LineString(地図端の開いた境界線)
+  があり、Polygonのみを`data/voronoiData.json`に採用。座標は小数点以下5桁に丸めて軽量化
+  (約1.7MB)。
+- **ボロノイ表示のパフォーマンス**: `js/map.js`の`MapView`にトグル可能な
+  `voronoiLayer`を追加。データは初回トグルON時のみ遅延fetchし、描画はLeafletの
+  canvasレンダラーを使用。現在のmap boundsに入る駅かつズームレベル9以上の場合のみ、
+  最大600ポリゴンまで動的に再描画する(moveend/zoomendで再計算)。全9800件常時描画は
+  行わない。
+- **places.json**: `nearestStationId`のみ新しい駅IDに再計算して更新。その他のフィールド
+  (94箇所の観光地データ)は変更していない。
+- **経済スケール**: `cost = max(200, round(haversine_km * 12, -2))`を踏襲。
+  discoveryScore/rewardも`tools/data_generator.py`の駅生成ロジック(`station_major`/
+  `station_local`、has_wikipedia固定など)を踏襲(乱数はNode標準のみで書いた
+  mulberry32 PRNG、シード42で再現可能。Pythonのrandomと値は異なるが再現性要件は満たす)。
+- 再実行可能: `node tools/import_station_database.mjs`。取得した生データは
+  `tools/.cache/station_database/`にキャッシュ(.gitignore対象)。

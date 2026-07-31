@@ -321,6 +321,12 @@ function setupResetButton() {
   });
 }
 
+function setupVoronoiButton() {
+  const btn = document.getElementById('fab-voronoi');
+  if (!btn) return;
+  btn.addEventListener('click', () => { MapView.toggleVoronoi(); });
+}
+
 function setupPlayAgain() {
   document.getElementById('btn-play-again').addEventListener('click', () => {
     hideOverlay('overlay-result');
@@ -364,6 +370,7 @@ async function init() {
   const data = await loadData();
   Game.init(data);
   MapView.init();
+  MapView.setStations(data.stationsById);
   setLoading(false);
 
   Save.clear();
@@ -371,6 +378,7 @@ async function init() {
 
   setupDifficultyButtons();
   setupResetButton();
+  setupVoronoiButton();
   setupPlayAgain();
   setupGameOverRetry();
   setupIntervals();

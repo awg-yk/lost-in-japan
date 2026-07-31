@@ -14,7 +14,7 @@
       "gridKey": "45.5_141.9",
       "hasWikipedia": true,
       "wikipediaLength": 3000,
-      "nearestStationId": 1
+      "nearestStationId": 378
     },
     {
       "id": 102,
@@ -30,7 +30,7 @@
       "gridKey": "41.7_140.7",
       "hasWikipedia": true,
       "wikipediaLength": 9000,
-      "nearestStationId": 3
+      "nearestStationId": 6341
     },
     {
       "id": 103,
@@ -46,7 +46,7 @@
       "gridKey": "43.0_141.3",
       "hasWikipedia": true,
       "wikipediaLength": 5000,
-      "nearestStationId": 2
+      "nearestStationId": 6273
     },
     {
       "id": 104,
@@ -62,7 +62,7 @@
       "gridKey": "43.1_140.9",
       "hasWikipedia": true,
       "wikipediaLength": 4000,
-      "nearestStationId": 2
+      "nearestStationId": 56
     },
     {
       "id": 105,
@@ -78,7 +78,7 @@
       "gridKey": "38.3_141.0",
       "hasWikipedia": true,
       "wikipediaLength": 12000,
-      "nearestStationId": 6
+      "nearestStationId": 980
     },
     {
       "id": 106,
@@ -94,7 +94,7 @@
       "gridKey": "39.0_141.1",
       "hasWikipedia": true,
       "wikipediaLength": 15000,
-      "nearestStationId": 5
+      "nearestStationId": 1243
     },
     {
       "id": 107,
@@ -110,7 +110,7 @@
       "gridKey": "40.6_140.4",
       "hasWikipedia": true,
       "wikipediaLength": 8000,
-      "nearestStationId": 4
+      "nearestStationId": 6397
     },
     {
       "id": 108,
@@ -126,7 +126,7 @@
       "gridKey": "35.7_139.7",
       "hasWikipedia": true,
       "wikipediaLength": 20000,
-      "nearestStationId": 7
+      "nearestStationId": 4616
     },
     {
       "id": 109,
@@ -142,7 +142,7 @@
       "gridKey": "35.6_139.6",
       "hasWikipedia": true,
       "wikipediaLength": 14000,
-      "nearestStationId": 7
+      "nearestStationId": 4984
     },
     {
       "id": 110,
@@ -158,7 +158,7 @@
       "gridKey": "35.6_139.7",
       "hasWikipedia": true,
       "wikipediaLength": 10000,
-      "nearestStationId": 7
+      "nearestStationId": 5250
     },
     {
       "id": 111,
@@ -174,7 +174,7 @@
       "gridKey": "38.0_138.2",
       "hasWikipedia": true,
       "wikipediaLength": 6000,
-      "nearestStationId": 21
+      "nearestStationId": 2147
     },
     {
       "id": 112,
@@ -190,7 +190,7 @@
       "gridKey": "38.0_138.4",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 21
+      "nearestStationId": 2148
     },
     {
       "id": 113,
@@ -206,7 +206,7 @@
       "gridKey": "36.5_136.6",
       "hasWikipedia": true,
       "wikipediaLength": 9500,
-      "nearestStationId": 9
+      "nearestStationId": 7321
     },
     {
       "id": 114,
@@ -222,7 +222,7 @@
       "gridKey": "36.2_136.9",
       "hasWikipedia": true,
       "wikipediaLength": 13000,
-      "nearestStationId": 9
+      "nearestStationId": 2432
     },
     {
       "id": 115,
@@ -238,7 +238,7 @@
       "gridKey": "35.1_136.8",
       "hasWikipedia": true,
       "wikipediaLength": 10000,
-      "nearestStationId": 8
+      "nearestStationId": 7622
     },
     {
       "id": 116,
@@ -254,7 +254,7 @@
       "gridKey": "34.9_135.7",
       "hasWikipedia": true,
       "wikipediaLength": 22000,
-      "nearestStationId": 10
+      "nearestStationId": 5986
     },
     {
       "id": 117,
@@ -270,7 +270,7 @@
       "gridKey": "34.9_135.7",
       "hasWikipedia": true,
       "wikipediaLength": 11000,
-      "nearestStationId": 10
+      "nearestStationId": 3055
     },
     {
       "id": 118,
@@ -286,7 +286,7 @@
       "gridKey": "34.6_135.5",
       "hasWikipedia": true,
       "wikipediaLength": 16000,
-      "nearestStationId": 11
+      "nearestStationId": 8080
     },
     {
       "id": 119,
@@ -302,7 +302,7 @@
       "gridKey": "34.6_135.5",
       "hasWikipedia": true,
       "wikipediaLength": 6000,
-      "nearestStationId": 11
+      "nearestStationId": 5608
     },
     {
       "id": 120,
@@ -318,7 +318,7 @@
       "gridKey": "34.8_134.6",
       "hasWikipedia": true,
       "wikipediaLength": 18000,
-      "nearestStationId": 12
+      "nearestStationId": 3235
     },
     {
       "id": 121,
@@ -334,7 +334,7 @@
       "gridKey": "34.2_132.3",
       "hasWikipedia": true,
       "wikipediaLength": 16000,
-      "nearestStationId": 13
+      "nearestStationId": 8478
     },
     {
       "id": 122,
@@ -350,7 +350,7 @@
       "gridKey": "34.3_134.0",
       "hasWikipedia": true,
       "wikipediaLength": 7000,
-      "nearestStationId": 17
+      "nearestStationId": 8517
     },
     {
       "id": 123,
@@ -366,7 +366,7 @@
       "gridKey": "33.8_132.7",
       "hasWikipedia": true,
       "wikipediaLength": 9000,
-      "nearestStationId": 18
+      "nearestStationId": 8626
     },
     {
       "id": 124,
@@ -382,7 +382,7 @@
       "gridKey": "33.5_130.5",
       "hasWikipedia": true,
       "wikipediaLength": 8500,
-      "nearestStationId": 14
+      "nearestStationId": 6244
     },
     {
       "id": 125,
@@ -398,7 +398,7 @@
       "gridKey": "31.5_130.6",
       "hasWikipedia": true,
       "wikipediaLength": 6000,
-      "nearestStationId": 16
+      "nearestStationId": 4263
     },
     {
       "id": 126,
@@ -414,7 +414,7 @@
       "gridKey": "34.2_129.2",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 22
+      "nearestStationId": 8875
     },
     {
       "id": 127,
@@ -430,7 +430,7 @@
       "gridKey": "26.2_127.7",
       "hasWikipedia": true,
       "wikipediaLength": 17000,
-      "nearestStationId": 19
+      "nearestStationId": 9116
     },
     {
       "id": 128,
@@ -446,7 +446,7 @@
       "gridKey": "26.6_127.8",
       "hasWikipedia": true,
       "wikipediaLength": 12000,
-      "nearestStationId": 19
+      "nearestStationId": 9356
     },
     {
       "id": 129,
@@ -462,7 +462,7 @@
       "gridKey": "25.8_131.2",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 23
+      "nearestStationId": 9356
     },
     {
       "id": 130,
@@ -478,7 +478,7 @@
       "gridKey": "39.7_140.6",
       "hasWikipedia": true,
       "wikipediaLength": 8000,
-      "nearestStationId": 5
+      "nearestStationId": 722
     },
     {
       "id": 131,
@@ -494,7 +494,7 @@
       "gridKey": "34.1_132.1",
       "hasWikipedia": true,
       "wikipediaLength": 9500,
-      "nearestStationId": 13
+      "nearestStationId": 3750
     },
     {
       "id": 132,
@@ -510,7 +510,7 @@
       "gridKey": "32.8_130.7",
       "hasWikipedia": true,
       "wikipediaLength": 17000,
-      "nearestStationId": 15
+      "nearestStationId": 9039
     },
     {
       "id": 133,
@@ -526,7 +526,7 @@
       "gridKey": "37.9_139.0",
       "hasWikipedia": true,
       "wikipediaLength": 6000,
-      "nearestStationId": 20
+      "nearestStationId": 2065
     },
     {
       "id": 134,
@@ -542,7 +542,7 @@
       "gridKey": "33.5_130.3",
       "hasWikipedia": true,
       "wikipediaLength": 7000,
-      "nearestStationId": 25
+      "nearestStationId": 8790
     },
     {
       "id": 135,
@@ -558,7 +558,7 @@
       "gridKey": "35.5_139.7",
       "hasWikipedia": true,
       "wikipediaLength": 4000,
-      "nearestStationId": 24
+      "nearestStationId": 5181
     },
     {
       "id": 136,
@@ -574,7 +574,7 @@
       "gridKey": "41.7_140.7",
       "hasWikipedia": true,
       "wikipediaLength": 8000,
-      "nearestStationId": 3
+      "nearestStationId": 6358
     },
     {
       "id": 137,
@@ -590,7 +590,7 @@
       "gridKey": "38.2_140.8",
       "hasWikipedia": true,
       "wikipediaLength": 11000,
-      "nearestStationId": 6
+      "nearestStationId": 9294
     },
     {
       "id": 138,
@@ -606,7 +606,7 @@
       "gridKey": "35.1_136.9",
       "hasWikipedia": true,
       "wikipediaLength": 13000,
-      "nearestStationId": 8
+      "nearestStationId": 5366
     },
     {
       "id": 139,
@@ -622,7 +622,7 @@
       "gridKey": "32.7_130.7",
       "hasWikipedia": true,
       "wikipediaLength": 6000,
-      "nearestStationId": 15
+      "nearestStationId": 9047
     },
     {
       "id": 140,
@@ -638,7 +638,7 @@
       "gridKey": "31.6_130.5",
       "hasWikipedia": true,
       "wikipediaLength": 8000,
-      "nearestStationId": 16
+      "nearestStationId": 4113
     },
     {
       "id": 141,
@@ -654,7 +654,7 @@
       "gridKey": "45.4_141.6",
       "hasWikipedia": true,
       "wikipediaLength": 3000,
-      "nearestStationId": 1
+      "nearestStationId": 378
     },
     {
       "id": 142,
@@ -670,7 +670,7 @@
       "gridKey": "34.7_135.1",
       "hasWikipedia": true,
       "wikipediaLength": 5000,
-      "nearestStationId": 12
+      "nearestStationId": 8196
     },
     {
       "id": 143,
@@ -686,7 +686,7 @@
       "gridKey": "33.5_130.3",
       "hasWikipedia": true,
       "wikipediaLength": 6000,
-      "nearestStationId": 14
+      "nearestStationId": 8792
     },
     {
       "id": 144,
@@ -702,7 +702,7 @@
       "gridKey": "40.8_140.6",
       "hasWikipedia": true,
       "wikipediaLength": 12000,
-      "nearestStationId": 4
+      "nearestStationId": 551
     },
     {
       "id": 145,
@@ -718,7 +718,7 @@
       "gridKey": "34.3_134.0",
       "hasWikipedia": true,
       "wikipediaLength": 9000,
-      "nearestStationId": 17
+      "nearestStationId": 8536
     },
     {
       "id": 146,
@@ -734,7 +734,7 @@
       "gridKey": "33.8_132.7",
       "hasWikipedia": true,
       "wikipediaLength": 15000,
-      "nearestStationId": 18
+      "nearestStationId": 8612
     },
     {
       "id": 147,
@@ -750,7 +750,7 @@
       "gridKey": "37.9_139.0",
       "hasWikipedia": true,
       "wikipediaLength": 4000,
-      "nearestStationId": 20
+      "nearestStationId": 2155
     },
     {
       "id": 148,
@@ -766,7 +766,7 @@
       "gridKey": "34.2_129.2",
       "hasWikipedia": true,
       "wikipediaLength": 5000,
-      "nearestStationId": 22
+      "nearestStationId": 8875
     },
     {
       "id": 149,
@@ -782,7 +782,7 @@
       "gridKey": "35.5_139.7",
       "hasWikipedia": true,
       "wikipediaLength": 3000,
-      "nearestStationId": 24
+      "nearestStationId": 5179
     },
     {
       "id": 150,
@@ -798,7 +798,7 @@
       "gridKey": "42.7_141.6",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 26
+      "nearestStationId": 212
     },
     {
       "id": 151,
@@ -814,7 +814,7 @@
       "gridKey": "35.6_139.7",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 28
+      "nearestStationId": 5133
     },
     {
       "id": 152,
@@ -830,7 +830,7 @@
       "gridKey": "35.5_139.6",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 29
+      "nearestStationId": 1372
     },
     {
       "id": 153,
@@ -846,7 +846,7 @@
       "gridKey": "35.2_139.1",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 30
+      "nearestStationId": 1273
     },
     {
       "id": 154,
@@ -862,7 +862,7 @@
       "gridKey": "35.1_139.0",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 31
+      "nearestStationId": 2604
     },
     {
       "id": 155,
@@ -878,7 +878,7 @@
       "gridKey": "35.1_138.9",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 32
+      "nearestStationId": 7437
     },
     {
       "id": 156,
@@ -894,7 +894,7 @@
       "gridKey": "34.9_138.3",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 34
+      "nearestStationId": 7458
     },
     {
       "id": 157,
@@ -910,7 +910,7 @@
       "gridKey": "34.7_138.0",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 35
+      "nearestStationId": 2552
     },
     {
       "id": 158,
@@ -926,7 +926,7 @@
       "gridKey": "34.7_137.7",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 36
+      "nearestStationId": 7510
     },
     {
       "id": 159,
@@ -942,7 +942,7 @@
       "gridKey": "34.7_137.3",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 37
+      "nearestStationId": 7693
     },
     {
       "id": 160,
@@ -958,7 +958,7 @@
       "gridKey": "34.7_135.1",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 41
+      "nearestStationId": 8196
     },
     {
       "id": 161,
@@ -974,7 +974,7 @@
       "gridKey": "34.6_135.0",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 42
+      "nearestStationId": 8211
     },
     {
       "id": 162,
@@ -990,7 +990,7 @@
       "gridKey": "34.6_133.9",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 45
+      "nearestStationId": 8383
     },
     {
       "id": 163,
@@ -1006,7 +1006,7 @@
       "gridKey": "34.4_133.3",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 47
+      "nearestStationId": 2882
     },
     {
       "id": 164,
@@ -1022,7 +1022,7 @@
       "gridKey": "34.4_133.1",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 48
+      "nearestStationId": 2886
     },
     {
       "id": 165,
@@ -1038,7 +1038,7 @@
       "gridKey": "34.4_133.0",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 49
+      "nearestStationId": 2888
     },
     {
       "id": 166,
@@ -1054,7 +1054,7 @@
       "gridKey": "33.8_130.8",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 55
+      "nearestStationId": 4027
     },
     {
       "id": 167,
@@ -1070,7 +1070,7 @@
       "gridKey": "35.7_139.7",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 56
+      "nearestStationId": 1298
     },
     {
       "id": 168,
@@ -1086,7 +1086,7 @@
       "gridKey": "35.9_139.6",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 57
+      "nearestStationId": 4691
     },
     {
       "id": 169,
@@ -1102,7 +1102,7 @@
       "gridKey": "36.5_139.8",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 59
+      "nearestStationId": 4741
     },
     {
       "id": 170,
@@ -1118,7 +1118,7 @@
       "gridKey": "37.1_140.2",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 61
+      "nearestStationId": 1193
     },
     {
       "id": 171,
@@ -1134,7 +1134,7 @@
       "gridKey": "37.3_140.3",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 62
+      "nearestStationId": 9315
     },
     {
       "id": 172,
@@ -1150,7 +1150,7 @@
       "gridKey": "37.7_140.4",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 63
+      "nearestStationId": 6541
     },
     {
       "id": 173,
@@ -1166,7 +1166,7 @@
       "gridKey": "38.0_140.6",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 64
+      "nearestStationId": 1215
     },
     {
       "id": 174,
@@ -1182,7 +1182,7 @@
       "gridKey": "38.5_140.9",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 65
+      "nearestStationId": 942
     },
     {
       "id": 175,
@@ -1198,7 +1198,7 @@
       "gridKey": "38.7_141.0",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 66
+      "nearestStationId": 1236
     },
     {
       "id": 176,
@@ -1214,7 +1214,7 @@
       "gridKey": "38.9_141.0",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 67
+      "nearestStationId": 1242
     },
     {
       "id": 177,
@@ -1230,7 +1230,7 @@
       "gridKey": "39.2_141.1",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 69
+      "nearestStationId": 700
     },
     {
       "id": 178,
@@ -1246,7 +1246,7 @@
       "gridKey": "39.3_141.1",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 70
+      "nearestStationId": 678
     },
     {
       "id": 179,
@@ -1262,7 +1262,7 @@
       "gridKey": "39.9_141.2",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 71
+      "nearestStationId": 6414
     },
     {
       "id": 180,
@@ -1278,7 +1278,7 @@
       "gridKey": "40.4_141.4",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 73
+      "nearestStationId": 467
     },
     {
       "id": 181,
@@ -1294,7 +1294,7 @@
       "gridKey": "36.3_139.0",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 80
+      "nearestStationId": 1586
     },
     {
       "id": 182,
@@ -1310,7 +1310,7 @@
       "gridKey": "36.9_138.8",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 82
+      "nearestStationId": 1923
     },
     {
       "id": 183,
@@ -1326,7 +1326,7 @@
       "gridKey": "37.1_138.9",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 83
+      "nearestStationId": 1930
     },
     {
       "id": 184,
@@ -1342,7 +1342,7 @@
       "gridKey": "36.4_136.4",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 97
+      "nearestStationId": 2380
     },
     {
       "id": 185,
@@ -1358,7 +1358,7 @@
       "gridKey": "36.2_136.3",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 98
+      "nearestStationId": 2377
     },
     {
       "id": 186,
@@ -1374,7 +1374,7 @@
       "gridKey": "36.2_136.1",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 99
+      "nearestStationId": 7390
     },
     {
       "id": 187,
@@ -1390,7 +1390,7 @@
       "gridKey": "36.0_136.2",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 100
+      "nearestStationId": 7415
     },
     {
       "id": 188,
@@ -1406,7 +1406,7 @@
       "gridKey": "35.9_136.2",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 101
+      "nearestStationId": 9413
     },
     {
       "id": 189,
@@ -1422,7 +1422,7 @@
       "gridKey": "35.6_136.0",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 102
+      "nearestStationId": 2358
     },
     {
       "id": 190,
@@ -1438,7 +1438,7 @@
       "gridKey": "33.3_130.4",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 104
+      "nearestStationId": 4070
     },
     {
       "id": 191,
@@ -1454,7 +1454,7 @@
       "gridKey": "32.5_130.5",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 108
+      "nearestStationId": 4101
     },
     {
       "id": 192,
@@ -1470,7 +1470,7 @@
       "gridKey": "32.9_130.5",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 107
+      "nearestStationId": 4085
     },
     {
       "id": 193,
@@ -1486,7 +1486,7 @@
       "gridKey": "33.1_130.0",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 112
+      "nearestStationId": 4394
     },
     {
       "id": 194,
@@ -1502,7 +1502,7 @@
       "gridKey": "33.0_129.9",
       "hasWikipedia": false,
       "wikipediaLength": 0,
-      "nearestStationId": 113
+      "nearestStationId": 9385
     }
   ]
 }
