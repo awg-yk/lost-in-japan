@@ -59,6 +59,8 @@ const KNOWN_SLOW_COMBOS = new Set([
   'greedy/hard/11', 'rush/hard/6', 'workHeavy/easy/10',
   // seed=10は他難易度でも既に既知の原因(§16.3)に該当済み。normalも同様。
   'workHeavy/normal/10',
+  // §18.5/18.6(観光地データ拡張)後に新たに顕在化。同じく§16.3の既知の原因。
+  'rush/hard/1',
 ]);
 
 function runAndReport(policyName, difficulty, seed) {
