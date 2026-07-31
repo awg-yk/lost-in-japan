@@ -37,6 +37,10 @@ const EAT_COST = 500;
 const EAT_HUNGER_GAIN = 45;
 const REST_COST = 150;
 const REST_STAMINA_GAIN = 45;
+// 2026-07-31: 「休憩する」は150円払っている=飲み物を買いながらベンチで休む、
+// という意味合いを持たせるため、体力に加えて空腹も少し回復するようにした
+// (ユーザー指示)。
+const REST_HUNGER_GAIN = 10;
 const ONSEN_COST = 500;
 
 // アルバイト: 観光名所(地点データ)でのみ働ける(2026-07-30変更。旧仕様では
@@ -344,8 +348,9 @@ const Game = {
     return this.atRecoverableNode() && this.state.money >= EAT_COST && this.state.hunger < 100;
   },
 
+  // 休憩は体力に加えて空腹も少し回復するため、どちらかが100%未満なら選べる。
   canAffordRest() {
-    return this.atRecoverableNode() && this.state.money >= REST_COST && this.state.stamina < 100;
+    return this.atRecoverableNode() && this.state.money >= REST_COST && (this.state.stamina < 100 || this.state.hunger < 100);
   },
 
   canAffordOnsen() {
@@ -367,13 +372,15 @@ const Game = {
   // デフォルトの体力回復手段とした。旧「温泉に入る」相当だが全回復ではない)。
   rest() {
     if (!this.canAffordRest()) {
-      return { ok: false, message: this.atRecoverableNode() ? '所持金が足りない、または既に体力満タンです。' : 'ここでは休憩できません。' };
+      return { ok: false, message: this.atRecoverableNode() ? '所持金が足りない、または既に空腹・体力ともに満タンです。' : 'ここでは休憩できません。' };
     }
     this.state.money -= REST_COST;
     this.state.stamina = Math.min(100, this.state.stamina + REST_STAMINA_GAIN);
+    // 飲み物を買いながらベンチで休む、という意味合いで空腹も少し回復する(2026-07-31)。
+    this.state.hunger = Math.min(100, this.state.hunger + REST_HUNGER_GAIN);
     this.state.hitchhikeLocked = false;
     Save.write(this.state);
-    return { ok: true, message: `少し休憩して体力を回復した(¥${REST_COST})。`, gameOver: this.checkGameOver() };
+    return { ok: true, message: `少し休憩して体力(+${REST_STAMINA_GAIN})と空腹(+${REST_HUNGER_GAIN})を回復した(¥${REST_COST})。`, gameOver: this.checkGameOver() };
   },
 
   // 「温泉に入る」: 温泉施設(type==='onsen')限定。体力を100%まで全回復する
@@ -479,6 +486,7 @@ window.EAT_COST = EAT_COST;
 window.EAT_HUNGER_GAIN = EAT_HUNGER_GAIN;
 window.REST_COST = REST_COST;
 window.REST_STAMINA_GAIN = REST_STAMINA_GAIN;
+window.REST_HUNGER_GAIN = REST_HUNGER_GAIN;
 window.ONSEN_COST = ONSEN_COST;
 window.HUNGER_DECAY_PER_KM = HUNGER_DECAY_PER_KM;
 window.STAMINA_DECAY_PER_KM_WALK = STAMINA_DECAY_PER_KM_WALK;

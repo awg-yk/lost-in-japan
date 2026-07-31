@@ -77,9 +77,10 @@ html, body{
 }
 .candidate-card{
   display:flex; flex-direction:column; align-items:center; justify-content:center;
-  gap:2px; flex:0 0 82px; width:82px; text-align:center; overflow:hidden;
+  /* 2026-07-31: 82px幅だと地名が省略されて読めないとの指摘を受けて拡幅した。 */
+  gap:2px; flex:0 0 116px; width:116px; text-align:center; overflow:hidden;
   background: rgba(255,255,255,0.05); border:1px solid var(--panel-border); border-radius:10px;
-  padding:6px 4px; color:var(--text-main); min-height:64px;
+  padding:6px 5px; color:var(--text-main); min-height:68px;
 }
 .candidate-card:active{ background: rgba(255,255,255,0.1); }
 .candidate-card--disabled{
@@ -89,7 +90,8 @@ html, body{
 .candidate-body{ width:100%; min-width:0; }
 .candidate-name{
   font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center; gap:3px;
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  white-space:normal; overflow:hidden; text-overflow:ellipsis;
+  display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; line-height:1.2;
 }
 .candidate-name .new-badge{ font-size:8px; background: var(--accent-green); color:#08120d; border-radius:5px; padding:1px 4px; font-weight:700; flex-shrink:0; }
 .candidate-meta{ font-size:9px; color: var(--text-sub); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }

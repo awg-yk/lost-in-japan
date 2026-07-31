@@ -500,6 +500,34 @@ function generateCandidates(ctx) {
       });
     const picked = pool.slice(0, Math.max(0, quota - already));
     for (const c of picked) { chosen.push(c); chosenKeys.add(c.key); }
+
+    // 2026-07-31(ユーザー指示): 「移動」カテゴリーでは、所持金で払える実際の
+    // 交通機関候補の中でも、最寄りの「主要駅」(接続数が多いハブ駅)が枠から
+    // 漏れないようにする。密集地では最寄り駅より遠い駅の方がスコアが高く
+    // 選ばれることがあるため、クォータが埋まっている場合はスコア最下位の
+    // 1件を削って主要駅を代わりに入れる。
+    if (cat === '移動') {
+      const MAJOR_STATION_MIN_CONNECTIONS = 3;
+      const majorPool = contested
+        .filter(c => c.category === '移動' && c.mode !== 'walk' && !chosenKeys.has(c.key))
+        .filter(c => {
+          const target = stationsById.get(c.targetId);
+          return target && (target.connections || []).length >= MAJOR_STATION_MIN_CONNECTIONS;
+        })
+        .sort((a, b) => a.distanceKm - b.distanceKm);
+      const nearestMajor = majorPool[0];
+      if (nearestMajor) {
+        // guaranteed(最寄り駅への孤立防止用帰路)は絶対に追い出さない対象。
+        const catItems = chosen.filter(c => c.category === '移動' && !c.guaranteed);
+        if (catItems.length >= quota) {
+          const worst = [...catItems].sort((a, b) => a.score - b.score)[0];
+          const idx = chosen.indexOf(worst);
+          if (idx !== -1) { chosen.splice(idx, 1); chosenKeys.delete(worst.key); }
+        }
+        chosen.push(nearestMajor);
+        chosenKeys.add(nearestMajor.key);
+      }
+    }
   }
 
   chosen.forEach(c => { delete c.guaranteed; });

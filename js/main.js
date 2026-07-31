@@ -115,11 +115,15 @@ function buildWorkCard() {
   return card;
 }
 
-// 食事は、実際の地点ごとの飲食店データが無い暫定実装として、駅・空港・観光名所
-// であれば一律に利用できる候補として出す(§実装時の裁量)。
+// ② 食事も、選べない場合(所持金不足・満腹)は非表示にせず薄い色で表示する
+// (2026-07-31、ユーザー指示。アルバイトと同じ扱いに揃えた)。実際の地点ごとの
+// 飲食店データが無い暫定実装として、駅・空港・観光名所であれば一律に利用できる
+// 候補として出す(§実装時の裁量)。
 function buildEatCard() {
+  const canEat = Game.canAffordEat();
   const card = document.createElement('button');
-  card.className = 'candidate-card candidate-card--action';
+  card.className = 'candidate-card candidate-card--action' + (canEat ? '' : ' candidate-card--disabled');
+  card.disabled = !canEat;
   card.innerHTML = `
     <div class="candidate-cost"><span class="cost-label">料金</span>${fmtMoney(window.EAT_COST)}</div>
     <div class="candidate-icon">🍙</div>
@@ -129,31 +133,37 @@ function buildEatCard() {
       <div class="candidate-preview">空腹 +${window.EAT_HUNGER_GAIN}</div>
     </div>
   `;
-  card.addEventListener('click', onEat);
+  if (canEat) card.addEventListener('click', onEat);
   return card;
 }
 
-// ③ 「休憩する」がデフォルトの体力回復手段(どこでも利用可、控えめな回復)。
+// ③ 「休憩する」がデフォルトの体力回復手段(どこでも利用可、控えめな回復。
+// 2026-07-31: 空腹も少し回復するようになった)。②と同様、選べない場合も
+// 薄い色で表示する。
 function buildRestCard() {
+  const canRest = Game.canAffordRest();
   const card = document.createElement('button');
-  card.className = 'candidate-card candidate-card--action';
+  card.className = 'candidate-card candidate-card--action' + (canRest ? '' : ' candidate-card--disabled');
+  card.disabled = !canRest;
   card.innerHTML = `
     <div class="candidate-cost"><span class="cost-label">料金</span>${fmtMoney(window.REST_COST)}</div>
     <div class="candidate-icon">💺</div>
     <div class="candidate-body">
       <div class="candidate-name">休憩する</div>
-      <div class="candidate-meta">体力を回復</div>
-      <div class="candidate-preview">体力 +${window.REST_STAMINA_GAIN}</div>
+      <div class="candidate-meta">体力・空腹を回復</div>
+      <div class="candidate-preview">体力 +${window.REST_STAMINA_GAIN} ・ 空腹 +${window.REST_HUNGER_GAIN}</div>
     </div>
   `;
-  card.addEventListener('click', onRest);
+  if (canRest) card.addEventListener('click', onRest);
   return card;
 }
 
 // ③ 「温泉に入る」は温泉施設(type==='onsen')限定。体力が100%全回復する。
 function buildOnsenCard() {
+  const canOnsen = Game.canAffordOnsen();
   const card = document.createElement('button');
-  card.className = 'candidate-card candidate-card--action';
+  card.className = 'candidate-card candidate-card--action' + (canOnsen ? '' : ' candidate-card--disabled');
+  card.disabled = !canOnsen;
   card.innerHTML = `
     <div class="candidate-cost"><span class="cost-label">料金</span>${fmtMoney(window.ONSEN_COST)}</div>
     <div class="candidate-icon">♨️</div>
@@ -163,7 +173,7 @@ function buildOnsenCard() {
       <div class="candidate-preview">体力 → 100%</div>
     </div>
   `;
-  card.addEventListener('click', onOnsen);
+  if (canOnsen) card.addEventListener('click', onOnsen);
   return card;
 }
 
@@ -202,19 +212,16 @@ function renderCandidates() {
   list.innerHTML = '';
   MapView.clearCandidatePreview();
   const candidates = Game.getCandidates();
-  const canEat = Game.canAffordEat();
-  const canRest = Game.canAffordRest();
-  const canOnsen = Game.canAffordOnsen();
-
-  // ①: アルバイトは選べない場合も表示だけする。食事/休憩/温泉は⑤(満腹/満タン)
-  // や場所条件で対象外の場合は引き続き非表示のまま(押しても意味の無いカードを
-  // 大量に並べないため)。
+  // ①②: アルバイト・食事・休憩は選べない場合も表示だけして薄い色にする
+  // (2026-07-31、ユーザー指示)。温泉は温泉施設でのみ意味を持つ行動のため、
+  // 引き続き該当施設にいるときだけ表示する(押しても常に意味の無いカードを
+  // 全国どこでも表示し続けるのは冗長なため)。
   const actionRow = document.createElement('div');
   actionRow.className = 'candidate-row';
   actionRow.appendChild(buildWorkCard());
-  if (canEat) actionRow.appendChild(buildEatCard());
-  if (canRest) actionRow.appendChild(buildRestCard());
-  if (canOnsen) actionRow.appendChild(buildOnsenCard());
+  actionRow.appendChild(buildEatCard());
+  actionRow.appendChild(buildRestCard());
+  if (Game.canAffordOnsen() || Game.atOnsen()) actionRow.appendChild(buildOnsenCard());
   list.appendChild(actionRow);
 
   if (candidates.length === 0) {
@@ -244,7 +251,10 @@ function renderCandidates() {
     group.appendChild(title);
     const row = document.createElement('div');
     row.className = 'candidate-row';
-    items.forEach(c => row.appendChild(buildCandidateCard(c)));
+    // ③ 候補はカテゴリー内で距離が近い順に並べる(2026-07-31、ユーザー指示。
+    // どの候補を残すか自体はmovement.js側のスコア選定のままで、表示順だけ変える)。
+    const sorted = [...items].sort((a, b) => a.distanceKm - b.distanceKm);
+    sorted.forEach(c => row.appendChild(buildCandidateCard(c)));
     group.appendChild(row);
     list.appendChild(group);
   }
