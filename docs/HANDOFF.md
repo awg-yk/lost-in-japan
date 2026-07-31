@@ -1353,3 +1353,30 @@ CKAN等オープンデータポータルから個別ダウンロードしたも�
 --zip .../xxx.zip --data data --out data`)でそのまま取り込める。次回
 セッションでの申し送り: `regression.test.js`(重い方)は本セッション終了時点で
 実行中だった可能性があるため、開始時に必ず結果を確認すること。
+
+### 18.6 追記: 宮城県全域データ(code4fukui/opendata-miyagi)を取り込み
+
+ユーザーから「宮城県のを作成しているリポジトリがあった」と
+`https://code4fukui.github.io/opendata-miyagi/` の情報提供があった。
+`code4fukui.github.io`自体はこのサンドボックスからブロックされていたが、
+`raw.githubusercontent.com`経由でリポジトリの中身は取得できた(§13.4以来
+確認している「GitHubホスティングのドメインは概ね通る」パターンと一致)。
+`index.html`から実データファイル(`040002_tourism.csv`、宮城県コード)を特定し、
+§18.5と同一フォーマット(観光庁「標準観光情報」)だったため
+`tools/import_municipal_tourism_csv.py`をそのまま流用して取り込めた。
+
+- 986件中709件(72%)に公式URLが付与されている良質なデータだった。
+- 重複除去(既存placesと同名/300m未満)後、新規400件追加(うち公式URL
+  295件)。places.json 20,770件→**21,170件**。公式URL充足数
+  211件→**506件**。
+- `validate_data.py` PASS、`npm test`15件PASS。
+
+**重要な学び**: `code4fukui`(Code for Fukui/Code for Japan系の市民開発者
+コミュニティ)は同一フォーマットで複数都道府県分のオープンデータを
+GitHubリポジトリとして公開している可能性が高い(`opendata-miyagi`のような
+命名規則、`opendata-<都道府県名>`)。次回以降、他の都道府県分も同様に
+`raw.githubusercontent.com/code4fukui/opendata-<pref>/main/<POIコード>_tourism.csv`
+のパターンで探せる可能性がある(ただしGitHub検索API自体はこのセッションでは
+使えないため、リポジトリ名が分かっている場合のみraw.githubusercontent.com
+経由で直接取得を試すことになる。ユーザーに他県のURLを教えてもらうのが
+最も確実)。
