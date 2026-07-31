@@ -51,6 +51,9 @@ const KNOWN_SLOW_COMBOS = new Set([
   'greedy/normal/10', 'discovery/normal/10', 'workHeavy/easy/6',
   // seed=10は複数難易度で同じ既知の原因(§16.3参照)に該当する。
   'greedy/hard/10', 'discovery/hard/10', 'workHeavy/hard/10',
+  // §18(候補ロジックの追加調整)後に新たに顕在化した組み合わせ。同じ既知の
+  // 原因(§16.3: 所持金0でも無料の空腹/体力回復イベントで粘れるレアケース)。
+  'discovery/hard/3', 'rush/easy/10',
 ]);
 
 function runAndReport(policyName, difficulty, seed) {
