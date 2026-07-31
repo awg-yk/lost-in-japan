@@ -277,8 +277,16 @@ function generateCandidates(ctx) {
     return discoveredSet.has(node.id) ? 0 : (node.discoveryScore || 0);
   }
 
-  // --- 徒歩候補(寄り道も許可) ---
-  const nearby = getNearbyNodes(currentNode.lat, currentNode.lng, walkRadius, spatialIndex, currentNode.id);
+  // --- 徒歩候補(観光名所への寄り道のみ。2026-07-31、ユーザー指示) ---
+  // 以前は徒歩圏内の駅・港(交通ノード)にも直接歩いて移動できたが、駅間を
+  // 徒歩で移動できてしまうと(徒歩半径8km・低ゲージ時でも5km)非現実的な
+  // 距離を歩くケースが目立つとの指摘を受けた。駅から駅への移動は必ず鉄道
+  // (connections由来の`mode: 'rail'`等)を使うようにし、徒歩は観光名所
+  // (`node._type === 'place'`)への寄り道専用にする。現在地が観光名所の場合の
+  // 「最寄り駅への帰路」だけは、駅ネットワークへ戻るために必要な例外として
+  // 別途下で保証している。
+  const nearby = getNearbyNodes(currentNode.lat, currentNode.lng, walkRadius, spatialIndex, currentNode.id)
+    .filter(({ node }) => node._type === 'place');
   for (const { node, distanceKm } of nearby) {
     // progressScoreにはctx.reachability(グラフ最短距離)を渡す(以前は未指定で
     // 常に直線距離フォールバックになっていた。Phase2の趣旨に沿って修正)。
