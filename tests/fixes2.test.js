@@ -31,6 +31,11 @@ test('①: eating and resting are available at a sightseeing place, not just tra
   Game.state.currentNodeId = placeId;
   Game.state.currentNodeType = 'place';
   Game.state.money = 10000;
+  // 2026-07-31: ⑤(満腹/満タンでは食事・休憩を選べない)を追加したため、
+  // 100%のままだとcanAffordEat/canAffordRestがfalseになる。回復の余地を
+  // 残した状態でテストする。
+  Game.state.hunger = 50;
+  Game.state.stamina = 50;
 
   assert.equal(Game.canAffordEat(), true, 'eat should be available at a sightseeing place');
   assert.equal(Game.canAffordRest(), true, 'rest should be available at a sightseeing place');
@@ -48,14 +53,16 @@ test('②: an already-visited sightseeing place that makes no progress toward th
   const nearbyPlaces = Movement.getNearbyNodes(currentNode.lat, currentNode.lng, Movement.WALK_RADIUS_KM_DEFAULT, Game.data.spatialIndex, currentNode.id)
     .filter(({ node }) => node._type === 'place');
   if (nearbyPlaces.length === 0) return; // このseed/開始地点の近くに観光名所が無ければ検証対象なしでスキップ
-  // 2026-07-31: 全国観光地データ拡張(2万件超)により、徒歩圏内に未発見の観光名所が
-  // 候補欄の枠数(MAX_CANDIDATES)を超えて同時に存在する駅も珍しくなくなった。
-  // その場合「任意の1件が必ず候補に残る」保証は、表示枠が有限である以上原理的に
-  // 満たせない(movement.jsのスコアリング側で頑張っても、枠を超える数の未発見地点を
-  // 全部出すことはできない)。そのため、この特定条件のシナリオでは検証をスキップし、
-  // 枠内に収まる密度のケースのみ「除外されない」ことを検証する。
-  if (nearbyPlaces.length > Movement.MAX_CANDIDATES - 1) return;
   const nearby = nearbyPlaces[0];
+  // 2026-07-31: 候補地はカテゴリー別(歴史・自然・温泉・道の駅・その他)に
+  // クォータ(Movement.CATEGORY_QUOTA)で絞られるようになった。徒歩圏内に、
+  // 検証対象と同じカテゴリーの未発見観光名所がクォータを超えて存在する場合、
+  // 「任意の1件が必ず候補に残る」保証は表示枠が有限である以上原理的に満たせない。
+  // そのため、そのケースでは検証をスキップし、クォータ内に収まる密度のケースのみ
+  // 「除外されない」ことを検証する。
+  const sameCategoryCount = nearbyPlaces.filter(({ node }) => Movement.categoryOf('place', node) === Movement.categoryOf('place', nearby.node)).length;
+  const quota = Movement.CATEGORY_QUOTA[Movement.categoryOf('place', nearby.node)] || 3;
+  if (sameCategoryCount > quota) return;
 
   const place = nearby.node;
   const progress = Movement.progressScore(currentNode, place, destinationNode, Game.reachability);

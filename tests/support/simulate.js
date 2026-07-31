@@ -81,7 +81,7 @@ function simulateGame({ sandbox, difficulty = 'normal', movementPolicy, seed, ma
   const { seedGameRandom } = require('./gameHarness');
   seedGameRandom(sandbox, seed);
 
-  const { Game } = sandbox;
+  const { Game, Movement } = sandbox;
   Game.newGame(difficulty);
 
   const violations = [];
@@ -96,9 +96,13 @@ function simulateGame({ sandbox, difficulty = 'normal', movementPolicy, seed, ma
     const canEat = canAffordEat(sandbox);
     const canRest = canAffordRest(sandbox);
 
-    const totalActions = candidates.length + [canWork, canEat, canRest].filter(Boolean).length;
-    if (totalActions > 9) {
-      violations.push(`step ${step}: total selectable actions (${totalActions}) exceed the 3x3=9 grid capacity`);
+    // 2026-07-31: 候補地をカテゴリー別(移動・歴史・自然・温泉・道の駅・その他)に
+    // 整理して表示する方式に変更したため、固定3x3=9マスグリッドの制約は撤廃した
+    // (docs/HANDOFF.md §17参照)。代わりに、候補数がカテゴリー別クォータの合計を
+    // 超えないという健全性だけを確認する(無制限に膨れ上がらないことの担保)。
+    const quotaSum = Object.values(Movement.CATEGORY_QUOTA).reduce((a, b) => a + b, 0);
+    if (candidates.length > quotaSum) {
+      violations.push(`step ${step}: candidate count (${candidates.length}) exceeds the category quota total (${quotaSum})`);
     }
 
     const action = decideAction(sandbox, candidates, movementPolicy, { workHeavyOverride });

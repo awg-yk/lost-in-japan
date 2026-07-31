@@ -1127,3 +1127,69 @@ stations=8,988件)。`python3 -m unittest discover -s tools -p "test_*.py"` →
 - ユーザーから「後で要望により修正する可能性が大きい」との理由で、
   フル回帰テストの完走を待たずに一旦pushしている。次回作業前に必ず
   `npm test`で現状を確認すること。
+
+---
+
+## 17. 追記(2026-07-31 続きのセッション): UI・経済まわり5点の指示への対応
+
+ユーザーから一度に5点の指示があり、全て対応した。
+
+### 17.1 対応内容
+1. **アルバイト不可時も表示だけしてグレーアウト**: `main.js`の`buildWorkCard()`
+   を常に描画するように変更(以前は`canWork`のときだけ描画)。`canWork()`が
+   falseなら`candidate-card--disabled`クラス+`disabled`属性を付与し、
+   クリックハンドラも登録しない。`style.css`に`.candidate-card--disabled`
+   (opacity 0.4・グレースケール・pointer-events:none)を追加。
+2. **食事・温泉(入浴)を500円に値上げ**: `EAT_COST`は300→500。旧`REST_COST`
+   (温泉)は次項の分離に伴い新設`ONSEN_COST=500`に引き継いだ。
+3. **「休憩する」をデフォルトに、「温泉に入る」は温泉施設限定・全回復**:
+   `Game.rest()`(旧「温泉に入る」相当、`REST_COST=150`のまま・+45回復)を
+   「休憩する」としてどこでも使えるデフォルトの体力回復手段にした。新設
+   `Game.onsen()`/`canAffordOnsen()`/`atOnsen()`(`currentNodeType==='place'`
+   かつ`node.type==='onsen'`)を追加し、温泉施設限定・`ONSEN_COST=500`で
+   体力を**100%まで全回復**(`+45`ではなく`= 100`)するようにした。
+4. **候補地のカテゴリー別表示**: `movement.js`に`categoryOf()`/
+   `PLACE_CATEGORY_MAP`/`CATEGORY_ORDER`(移動・歴史・自然・温泉・道の駅・
+   その他)/`CATEGORY_QUOTA`(カテゴリーごとの最大件数、移動8・歴史5・自然5・
+   温泉3・道の駅3・その他4)を新設。`generateCandidates()`の最終選定を、
+   従来のスコア純粋top-N(または直前の交通機関/徒歩クォータ方式)から
+   カテゴリー別クォータ方式に変更した。**重要な落とし穴**: 「移動」カテゴリー
+   には近隣駅への徒歩候補と実際の交通機関(鉄道・ヒッチハイク等)候補の両方が
+   属するため、素直にスコア順で埋めると徒歩候補だけでクォータが埋まり、
+   肝心の運賃・ヒッチハイク候補が押し出される(§16で修正した密集地問題の
+   再発)。「移動」カテゴリー内では`mode !== 'walk'`(実際の交通機関)を
+   徒歩候補より常に優先するソート条件を追加して対処した。
+   `main.js`の`renderCandidates()`をカテゴリーごとの横スクロール帯
+   (`.candidate-row`)を縦に並べる形式に全面書き換え。固定3x3グリッドは
+   撤廃し、`style.css`の`#candidate-list`/`.candidate-card`もそれに合わせて
+   変更(`#candidate-panel`の`max-height`は38vh→44vhに微増)。
+5. **満腹/満タン時は食事・休憩・温泉を選択不可**: `canAffordEat()`に
+   `hunger < 100`、`canAffordRest()`/`canAffordOnsen()`に`stamina < 100`の
+   条件を追加。
+
+### 17.2 テストへの反映
+- `tests/fixes.test.js`のfix1(3x3=9マス上限の検証)は前提が崩れたため、
+  「候補総数がカテゴリー別クォータの合計を超えない」健全性チェックに改定
+  (`Movement.CATEGORY_QUOTA`を利用)。
+- `tests/fixes2.test.js`①(食事/休憩の利用可否)は⑤追加によりhunger/stamina
+  100%だと利用不可になるため、テスト側で50%に設定し直した。
+- `tests/fixes2.test.js`②(既訪問・進行寄与なしの観光地除外)のスキップ条件を
+  `Movement.MAX_CANDIDATES`ベースから、検証対象と同じカテゴリーの未発見候補数
+  が`Movement.CATEGORY_QUOTA[category]`を超えるかどうかに変更。
+- `getCandidates()`の詰み回避ロジック(§16.1参照)に`!this.canAffordOnsen()`
+  も追加(温泉施設で入浴できるのに詰み扱いしてしまわないように)。
+- `npm test`(`fixes.test.js`+`fixes2.test.js`)は全15件PASS確認済み。
+  `regression.test.js`(重い方)は本セッション終了時点で実行中だった可能性が
+  あるため、次回セッション開始時に必ず結果を確認すること。
+- `run`スキル(Playwright、`/opt/pw-browsers/chromium-1194/chrome-linux/chrome`)
+  で実際に起動し、①④⑤(グレーアウト表示・カテゴリー別横スクロール表示・
+  満タン時の食事/休憩非表示)をスクリーンショットで目視確認済み。②③は
+  Node上のヘッドレス実行で値を直接確認済み(EAT_COST=500、REST_COST=150、
+  ONSEN_COST=500、温泉入浴でstamina=100に全回復)。
+
+### 17.3 次回セッションへの申し送り
+- カテゴリーごとのクォータ数(移動8・歴史5・自然5・温泉3・道の駅3・その他4)は
+  今回の一回限りの調整で、実際に「たくさん表示できて見やすいか」はユーザーの
+  実プレイでのフィードバック待ち。
+- 「温泉に入る」の対象は`data/places.json`の`type==='onsen'`のみ。道の駅
+  (`michinoeki`)等、他のtypeに対する専用アクションは今回追加していない。

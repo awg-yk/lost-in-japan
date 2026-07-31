@@ -110,21 +110,27 @@ test('fix3: work count resets for a different place (limit is per-node, not glob
   assert.equal(Game.work().ok, true);
 });
 
-test('fix1: total selectable actions (movement candidates + work/eat/rest) never exceed the 3x3=9 grid', () => {
-  // 複数シード・複数地点で移動を進めながら、毎ステップの選択肢総数が9を超えないことを確認する。
+// 2026-07-31: ユーザー指示により候補地をカテゴリー別(移動・歴史・自然・温泉・
+// 道の駅・その他)表示に変更し、「候補地をたくさん表示できる」ことを狙って
+// 固定3x3=9マスグリッドの制約を撤廃した(js/movement.jsのCATEGORY_QUOTA参照)。
+// そのため旧fix1(9マス以内)は前提が崩れており、代わりに「候補総数が
+// カテゴリー別クォータの合計を超えない」という新しい上限だけを確認する
+// (無制限に膨れ上がらないことの健全性チェック)。
+test('fix1(改定): 候補総数はカテゴリー別クォータの合計を超えない', () => {
   for (let seed = 1; seed <= 20; seed++) {
     const sandbox = createGameContext();
     seedGameRandom(sandbox, seed);
-    const { Game } = sandbox;
+    const { Game, Movement } = sandbox;
     Game.newGame('normal');
+    const quotaSum = Object.values(Movement.CATEGORY_QUOTA).reduce((a, b) => a + b, 0);
 
     for (let step = 0; step < 30 && !Game.state.arrived; step++) {
       const candidates = Game.getCandidates();
       const canWork = Game.canWork();
       const canEat = Game.canAffordEat();
       const canRest = Game.canAffordRest();
-      const total = candidates.length + [canWork, canEat, canRest].filter(Boolean).length;
-      assert.ok(total <= 9, `seed ${seed} step ${step}: ${total} selectable actions exceed the 9-cell grid`);
+      assert.ok(candidates.length <= quotaSum,
+        `seed ${seed} step ${step}: ${candidates.length} candidates exceed the category quota total (${quotaSum})`);
 
       const pick = candidates[0];
       if (pick) Game.chooseCandidate(pick);

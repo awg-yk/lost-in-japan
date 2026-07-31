@@ -11,6 +11,28 @@ const HITCHHIKE_LOW_STAT_PENALTY = 0.15;
 const HITCHHIKE_SCORE_PENALTY = 0.04;
 const MAX_CANDIDATES = 6;
 
+// 2026-07-31: ユーザー指示により、候補地をカテゴリー別(歴史・自然・温泉・
+// 道の駅・その他の観光目的と、ゴールに近づく駅・港等の「移動」)に整理して
+// 表示できるようにする。observedデータのtype値からカテゴリーを機械的に
+// 割り当てる(未知のtypeは「その他」に落とす)。
+const PLACE_CATEGORY_MAP = {
+  shrine: '歴史', temple: '歴史', castle: '歴史', historic: '歴史',
+  famous_facility: '歴史', world_heritage: '歴史', city_hall: '歴史',
+  museum: '歴史', art_museum: '歴史',
+  scenic_spot: '自然', nature: '自然', park: '自然', viewpoint: '自然',
+  waterfall: '自然', mountain: '自然',
+  onsen: '温泉',
+  michinoeki: '道の駅',
+};
+const CATEGORY_ORDER = ['移動', '歴史', '自然', '温泉', '道の駅', 'その他'];
+// カテゴリーごとの最大表示件数(移動は経路継続に重要なため多めに確保)。
+const CATEGORY_QUOTA = { 移動: 8, 歴史: 5, 自然: 5, 温泉: 3, 道の駅: 3, その他: 4 };
+
+function categoryOf(targetType, node) {
+  if (targetType === 'transport') return '移動';
+  return PLACE_CATEGORY_MAP[node && node.type] || 'その他';
+}
+
 function haversineKm(lat1, lng1, lat2, lng2) {
   const R = 6371;
   const toRad = d => (d * Math.PI) / 180;
@@ -286,6 +308,7 @@ function generateCandidates(ctx) {
       isBudget: false,
       discoveryScore: node.discoveryScore || 0,
       isNew: !discoveredSet.has(node.id),
+      category: categoryOf(node._type, node),
       prunable,
       score: candidateScore({
         progress,
@@ -312,6 +335,7 @@ function generateCandidates(ctx) {
         isBudget: false,
         discoveryScore: station.discoveryScore || 0,
         isNew: !discoveredSet.has(station.id),
+        category: '移動',
         // 密集した観光地データの中でも、この「最寄り駅への帰路」だけは枠の
         // 奪い合い(下記の交通機関/徒歩クォータ選定)から除外して必ず残す
         // (2026-07-31。孤立防止のためにcandidatesへ追加しても、最終的な
@@ -359,6 +383,7 @@ function generateCandidates(ctx) {
           isBudget: !!conn.isBudget,
           discoveryScore: toNode.discoveryScore || 0,
           isNew: !discoveredSet.has(toNode.id),
+          category: '移動',
           score: candidateScore({ progress, discoveryScore: discovery, transportScore: transportScoreVal }),
         });
       }
@@ -389,6 +414,7 @@ function generateCandidates(ctx) {
           successRate,
           discoveryScore: toNode.discoveryScore || 0,
           isNew: !discoveredSet.has(toNode.id),
+          category: '移動',
           score: candidateScore({ progress: expectedProgress, discoveryScore: discovery, transportScore: transportScoreVal }) - HITCHHIKE_SCORE_PENALTY,
         });
       }
@@ -438,31 +464,43 @@ function generateCandidates(ctx) {
   // 全国観光地データの拡張(2万件超)により、駅周辺の徒歩候補(観光名所)だけで
   // 上位枠が埋まり、鉄道・ヒッチハイク等の交通機関候補や他の未発見スポットが
   // 押し出されて選べなくなる密集地問題への対処(2026-07-31、実際にnpm testの
-  // 「詰み(往復振動)」で顕在化)。スコア純粋な全体top-Nではなく、「交通機関」枠
-  // (鉄道・飛行機・船・ヒッチハイク)を最低限確保してから残りをスコア順に埋める。
-  // 徒歩枠内では未発見(isNew)の地点を既発見より優先し、同じく密集による埋没を防ぐ。
+  // 「詰み(往復振動)」で顕在化)。当初はスコア純粋な全体top-Nから交通機関枠/
+  // 徒歩枠のクォータ方式に変更したが、さらにユーザー指示(カテゴリー別表示)を
+  // 受けて、カテゴリー(移動・歴史・自然・温泉・道の駅・その他)ごとに上位を
+  // 確保する方式に発展させた。各カテゴリー内では未発見(isNew)の地点を
+  // 既発見より優先し、密集による埋没を防ぐ。
   const guaranteed = finalCandidates.filter(c => c.guaranteed);
   const contested = finalCandidates.filter(c => !c.guaranteed);
-  const contestedSlots = Math.max(0, MAX_CANDIDATES - guaranteed.length);
 
-  const transportPool = contested.filter(c => c.mode !== 'walk').sort((a, b) => b.score - a.score);
-  const walkPool = contested.filter(c => c.mode === 'walk').sort((a, b) => {
-    if (a.isNew !== b.isNew) return a.isNew ? -1 : 1;
-    return b.score - a.score;
-  });
-  const transportQuota = Math.min(transportPool.length, Math.ceil(contestedSlots / 2));
-  const walkQuota = Math.min(walkPool.length, contestedSlots - transportQuota);
-  const chosen = [...guaranteed, ...transportPool.slice(0, transportQuota), ...walkPool.slice(0, walkQuota)];
-
-  const remaining = MAX_CANDIDATES - chosen.length;
-  if (remaining > 0) {
-    const chosenKeys = new Set(chosen.map(c => c.key));
-    const leftover = contested.filter(c => !chosenKeys.has(c.key)).sort((a, b) => b.score - a.score);
-    chosen.push(...leftover.slice(0, remaining));
+  const chosen = [...guaranteed];
+  const chosenKeys = new Set(guaranteed.map(c => c.key));
+  for (const cat of CATEGORY_ORDER) {
+    const quota = CATEGORY_QUOTA[cat] || 3;
+    const already = chosen.filter(c => c.category === cat).length;
+    const pool = contested
+      .filter(c => c.category === cat && !chosenKeys.has(c.key))
+      .sort((a, b) => {
+        // 「移動」カテゴリーでは、実際の交通機関(鉄道・飛行機・船・ヒッチハイク)
+        // を、単なる近隣駅への徒歩候補より優先する(2026-07-31。そうしないと
+        // 徒歩で行ける駅が多いエリアで、肝心の運賃・ヒッチハイク候補が
+        // クォータから押し出されてしまう=以前修正した密集地問題の再発)。
+        if (cat === '移動' && (a.mode !== 'walk') !== (b.mode !== 'walk')) {
+          return a.mode !== 'walk' ? -1 : 1;
+        }
+        if (a.isNew !== b.isNew) return a.isNew ? -1 : 1;
+        return b.score - a.score;
+      });
+    const picked = pool.slice(0, Math.max(0, quota - already));
+    for (const c of picked) { chosen.push(c); chosenKeys.add(c.key); }
   }
 
   chosen.forEach(c => { delete c.guaranteed; });
-  chosen.sort((a, b) => b.score - a.score);
+  // カテゴリー順→スコア順に並べる(UI側でのカテゴリー別グルーピング表示を想定)。
+  chosen.sort((a, b) => {
+    const catDiff = CATEGORY_ORDER.indexOf(a.category) - CATEGORY_ORDER.indexOf(b.category);
+    if (catDiff !== 0) return catDiff;
+    return b.score - a.score;
+  });
   return chosen;
 }
 
@@ -482,4 +520,7 @@ window.Movement = {
   WALK_RADIUS_KM_DEFAULT,
   WALK_RADIUS_KM_LOW_STAT,
   MAX_CANDIDATES,
+  CATEGORY_ORDER,
+  CATEGORY_QUOTA,
+  categoryOf,
 };

@@ -30,10 +30,14 @@ const STAMINA_DECAY_PER_MOVE_FLAT = 0.15;
 // ヒッチハイク失敗時は固定値ではなく、空腹・体力をその場で半分にする
 // (2026-07-30変更。js/game.js の chooseCandidate 内で `/= 2` として実装)。
 
-const EAT_COST = 300;
+// 2026-07-31: ユーザー指示により食事・温泉(入浴)を値上げし、「休憩する」
+// (どこでも使える控えめな体力回復)と「温泉に入る」(温泉施設限定・全回復)を
+// 分離した。
+const EAT_COST = 500;
 const EAT_HUNGER_GAIN = 45;
 const REST_COST = 150;
 const REST_STAMINA_GAIN = 45;
+const ONSEN_COST = 500;
 
 // アルバイト: 観光名所(地点データ)でのみ働ける(2026-07-30変更。旧仕様では
 // 駅・空港・港でも働けたが、それだと寄り道せず稼げてしまい「旅先の発見」という
@@ -224,7 +228,7 @@ const Game = {
     // 不必要にヒッチハイクへ強制的に賭けさせてしまう。食事・温泉の可否も
     // 併せて確認し、本当に他に取れる手段が無い場合に限定する。
     if (candidates.length === 0 && this.state.hitchhikeLocked &&
-        !this.canWork() && !this.canAffordEat() && !this.canAffordRest()) {
+        !this.canWork() && !this.canAffordEat() && !this.canAffordRest() && !this.canAffordOnsen()) {
       return Movement.generateCandidates({ ...baseCtx, hitchhikeLocked: false });
     }
 
@@ -326,17 +330,31 @@ const Game = {
     return this.atTransportNode() || this.atSightseeingPlace();
   },
 
+  // 温泉施設(観光名所のtype==='onsen')かどうか。「温泉に入る」はここでのみ選べる
+  // (2026-07-31、ユーザー指示)。
+  atOnsen() {
+    if (this.state.currentNodeType !== 'place') return false;
+    const node = this.currentNode();
+    return !!(node && node.type === 'onsen');
+  },
+
+  // ⑤ 空腹・体力が既に100%のときは、食事/休憩/温泉を選べないようにする
+  // (回復する意味が無いため。2026-07-31、ユーザー指示)。
   canAffordEat() {
-    return this.atRecoverableNode() && this.state.money >= EAT_COST;
+    return this.atRecoverableNode() && this.state.money >= EAT_COST && this.state.hunger < 100;
   },
 
   canAffordRest() {
-    return this.atRecoverableNode() && this.state.money >= REST_COST;
+    return this.atRecoverableNode() && this.state.money >= REST_COST && this.state.stamina < 100;
+  },
+
+  canAffordOnsen() {
+    return this.atOnsen() && this.state.money >= ONSEN_COST && this.state.stamina < 100;
   },
 
   eat() {
     if (!this.canAffordEat()) {
-      return { ok: false, message: this.atRecoverableNode() ? '所持金が足りません。' : 'ここでは食事できません。' };
+      return { ok: false, message: this.atRecoverableNode() ? '所持金が足りない、または既に満腹です。' : 'ここでは食事できません。' };
     }
     this.state.money -= EAT_COST;
     this.state.hunger = Math.min(100, this.state.hunger + EAT_HUNGER_GAIN);
@@ -345,15 +363,30 @@ const Game = {
     return { ok: true, message: `食事をとった(¥${EAT_COST})。`, gameOver: this.checkGameOver() };
   },
 
+  // 「休憩する」: どこでも使える控えめな体力回復(2026-07-31、ユーザー指示で
+  // デフォルトの体力回復手段とした。旧「温泉に入る」相当だが全回復ではない)。
   rest() {
     if (!this.canAffordRest()) {
-      return { ok: false, message: this.atRecoverableNode() ? '所持金が足りません。' : 'ここでは温泉に入れません。' };
+      return { ok: false, message: this.atRecoverableNode() ? '所持金が足りない、または既に体力満タンです。' : 'ここでは休憩できません。' };
     }
     this.state.money -= REST_COST;
     this.state.stamina = Math.min(100, this.state.stamina + REST_STAMINA_GAIN);
     this.state.hitchhikeLocked = false;
     Save.write(this.state);
-    return { ok: true, message: `温泉に入って体力を回復した(¥${REST_COST})。`, gameOver: this.checkGameOver() };
+    return { ok: true, message: `少し休憩して体力を回復した(¥${REST_COST})。`, gameOver: this.checkGameOver() };
+  },
+
+  // 「温泉に入る」: 温泉施設(type==='onsen')限定。体力を100%まで全回復する
+  // (2026-07-31、ユーザー指示)。
+  onsen() {
+    if (!this.canAffordOnsen()) {
+      return { ok: false, message: this.atOnsen() ? '所持金が足りない、または既に体力満タンです。' : 'ここには温泉がありません。' };
+    }
+    this.state.money -= ONSEN_COST;
+    this.state.stamina = 100;
+    this.state.hitchhikeLocked = false;
+    Save.write(this.state);
+    return { ok: true, message: `温泉に入って体力が全回復した(¥${ONSEN_COST})。`, gameOver: this.checkGameOver() };
   },
 
   // アルバイト: 観光名所(地点データ)であれば働けるが、以下の条件で制限する。
@@ -446,5 +479,6 @@ window.EAT_COST = EAT_COST;
 window.EAT_HUNGER_GAIN = EAT_HUNGER_GAIN;
 window.REST_COST = REST_COST;
 window.REST_STAMINA_GAIN = REST_STAMINA_GAIN;
+window.ONSEN_COST = ONSEN_COST;
 window.HUNGER_DECAY_PER_KM = HUNGER_DECAY_PER_KM;
 window.STAMINA_DECAY_PER_KM_WALK = STAMINA_DECAY_PER_KM_WALK;

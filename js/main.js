@@ -91,25 +91,32 @@ function candidatePreviewText(c) {
   return `空腹 ${fmt(hungerLoss)} ・ 体力 ${fmt(staminaLoss)}`;
 }
 
+// ① アルバイトができない場合も候補として表示だけはし、薄い色にして選べなく
+// する(2026-07-31、ユーザー指示。押せない理由が分かりやすいように)。
 function buildWorkCard() {
+  const canWork = Game.canWork();
   const preview = Game.workPreview();
   const card = document.createElement('button');
-  card.className = 'candidate-card candidate-card--action';
+  card.className = 'candidate-card candidate-card--action' + (canWork ? '' : ' candidate-card--disabled');
+  card.disabled = !canWork;
+  const metaText = preview.totalRemaining <= 0
+    ? '今回の旅ではもう働けません'
+    : `ここであと${preview.remaining}回まで(全${preview.max}回・旅全体であと${preview.totalRemaining}回)`;
   card.innerHTML = `
     <div class="candidate-cost earn">+${fmtMoney(preview.wage)}</div>
     <div class="candidate-icon">💼</div>
     <div class="candidate-body">
       <div class="candidate-name">アルバイトする</div>
-      <div class="candidate-meta">ここであと${preview.remaining}回まで(全${preview.max}回)</div>
+      <div class="candidate-meta">${metaText}</div>
       <div class="candidate-preview">空腹 -${preview.hungerCost} ・ 体力 -${preview.staminaCost}</div>
     </div>
   `;
-  card.addEventListener('click', onWork);
+  if (canWork) card.addEventListener('click', onWork);
   return card;
 }
 
-// 食事・温泉は、実際の地点ごとの飲食店/温泉データが無い暫定実装として、
-// 駅・空港であれば一律に利用できる候補として出す(§実装時の裁量)。
+// 食事は、実際の地点ごとの飲食店データが無い暫定実装として、駅・空港・観光名所
+// であれば一律に利用できる候補として出す(§実装時の裁量)。
 function buildEatCard() {
   const card = document.createElement('button');
   card.className = 'candidate-card candidate-card--action';
@@ -126,14 +133,15 @@ function buildEatCard() {
   return card;
 }
 
+// ③ 「休憩する」がデフォルトの体力回復手段(どこでも利用可、控えめな回復)。
 function buildRestCard() {
   const card = document.createElement('button');
   card.className = 'candidate-card candidate-card--action';
   card.innerHTML = `
     <div class="candidate-cost"><span class="cost-label">料金</span>${fmtMoney(window.REST_COST)}</div>
-    <div class="candidate-icon">♨️</div>
+    <div class="candidate-icon">💺</div>
     <div class="candidate-body">
-      <div class="candidate-name">温泉に入る</div>
+      <div class="candidate-name">休憩する</div>
       <div class="candidate-meta">体力を回復</div>
       <div class="candidate-preview">体力 +${window.REST_STAMINA_GAIN}</div>
     </div>
@@ -142,65 +150,104 @@ function buildRestCard() {
   return card;
 }
 
-function buildEmptySlot() {
-  const el = document.createElement('div');
-  el.className = 'candidate-slot-empty';
-  return el;
+// ③ 「温泉に入る」は温泉施設(type==='onsen')限定。体力が100%全回復する。
+function buildOnsenCard() {
+  const card = document.createElement('button');
+  card.className = 'candidate-card candidate-card--action';
+  card.innerHTML = `
+    <div class="candidate-cost"><span class="cost-label">料金</span>${fmtMoney(window.ONSEN_COST)}</div>
+    <div class="candidate-icon">♨️</div>
+    <div class="candidate-body">
+      <div class="candidate-name">温泉に入る</div>
+      <div class="candidate-meta">体力が全回復</div>
+      <div class="candidate-preview">体力 → 100%</div>
+    </div>
+  `;
+  card.addEventListener('click', onOnsen);
+  return card;
 }
 
-// 「休憩」(アルバイト・食事・温泉、その場での行動)と「移動」(徒歩・鉄道・
-// ヒッチハイク等)を、3x3グリッドの1行目/2〜3行目にはっきり分けて表示する
-// (2026-07-30、ユーザー指示。押し間違いを減らすため)。休憩側は常に3マス分
-// (最大3個)を確保し、足りない分は空マスで埋めることで、移動候補が常に
-// 2行目から始まるようにする(候補数によって位置がずれないようにするため)。
-const ACTION_SLOT_COUNT = 3;
+function buildCandidateCard(c) {
+  const card = document.createElement('button');
+  card.className = 'candidate-card candidate-card--move';
+  const preview = candidatePreviewText(c);
+  card.innerHTML = `
+    <div class="candidate-cost">${c.cost > 0 ? `<span class="cost-label">運賃</span>${fmtMoney(c.cost)}` : '無料'}</div>
+    <div class="candidate-icon">${MODE_ICON[c.mode] || '📍'}</div>
+    <div class="candidate-body">
+      <div class="candidate-name">${c.targetName}${c.isNew ? '<span class="new-badge">未発見</span>' : ''}</div>
+      <div class="candidate-meta">${candidateMetaText(c)}</div>
+      ${preview ? `<div class="candidate-preview">${preview}</div>` : ''}
+    </div>
+  `;
+  card.addEventListener('click', () => onChooseCandidate(c));
+
+  // カーソルを合わせている間、現在地→候補地の直線と候補地点を地図上で強調表示する。
+  const targetNode = c.targetType === 'place' ? Game.data.placesById.get(c.targetId) : Game.data.stationsById.get(c.targetId);
+  const currentNode = Game.currentNode();
+  if (targetNode && currentNode) {
+    card.addEventListener('mouseenter', () => MapView.showCandidatePreview(currentNode, targetNode));
+    card.addEventListener('mouseleave', () => MapView.clearCandidatePreview());
+  }
+  return card;
+}
+
+// ④ 候補地をカテゴリー別(移動・歴史・自然・温泉・道の駅・その他)に整理して
+// 表示する(2026-07-31、ユーザー指示。カテゴリーごとの横スクロール帯にする
+// ことで、候補地をたくさん表示できるようにした)。
+const CATEGORY_ICON = { 移動: '🧭', 歴史: '🏯', 自然: '🌲', 温泉: '♨️', 道の駅: '🅿️', その他: '📍' };
 
 function renderCandidates() {
   const list = document.getElementById('candidate-list');
   list.innerHTML = '';
   MapView.clearCandidatePreview();
   const candidates = Game.getCandidates();
-  const canWork = Game.canWork();
   const canEat = Game.canAffordEat();
   const canRest = Game.canAffordRest();
+  const canOnsen = Game.canAffordOnsen();
 
-  if (candidates.length === 0 && !canWork && !canEat && !canRest) {
-    list.innerHTML = '<div class="candidate-meta">近くに移動できる場所が見つかりません。</div>';
+  // ①: アルバイトは選べない場合も表示だけする。食事/休憩/温泉は⑤(満腹/満タン)
+  // や場所条件で対象外の場合は引き続き非表示のまま(押しても意味の無いカードを
+  // 大量に並べないため)。
+  const actionRow = document.createElement('div');
+  actionRow.className = 'candidate-row';
+  actionRow.appendChild(buildWorkCard());
+  if (canEat) actionRow.appendChild(buildEatCard());
+  if (canRest) actionRow.appendChild(buildRestCard());
+  if (canOnsen) actionRow.appendChild(buildOnsenCard());
+  list.appendChild(actionRow);
+
+  if (candidates.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'candidate-meta';
+    empty.textContent = '近くに移動できる場所が見つかりません。';
+    list.appendChild(empty);
     return;
   }
 
-  const actionCards = [];
-  if (canWork) actionCards.push(buildWorkCard());
-  if (canEat) actionCards.push(buildEatCard());
-  if (canRest) actionCards.push(buildRestCard());
-  while (actionCards.length < ACTION_SLOT_COUNT) actionCards.push(buildEmptySlot());
-  actionCards.forEach(el => list.appendChild(el));
+  const byCategory = new Map();
+  for (const c of candidates) {
+    const cat = c.category || 'その他';
+    if (!byCategory.has(cat)) byCategory.set(cat, []);
+    byCategory.get(cat).push(c);
+  }
 
-  candidates.forEach(c => {
-    const card = document.createElement('button');
-    card.className = 'candidate-card candidate-card--move';
-    const preview = candidatePreviewText(c);
-    card.innerHTML = `
-      <div class="candidate-cost">${c.cost > 0 ? `<span class="cost-label">運賃</span>${fmtMoney(c.cost)}` : '無料'}</div>
-      <div class="candidate-icon">${MODE_ICON[c.mode] || '📍'}</div>
-      <div class="candidate-body">
-        <div class="candidate-name">${c.targetName}${c.isNew ? '<span class="new-badge">未発見</span>' : ''}</div>
-        <div class="candidate-meta">${candidateMetaText(c)}</div>
-        ${preview ? `<div class="candidate-preview">${preview}</div>` : ''}
-      </div>
-    `;
-    card.addEventListener('click', () => onChooseCandidate(c));
-
-    // カーソルを合わせている間、現在地→候補地の直線と候補地点を地図上で強調表示する。
-    const targetNode = c.targetType === 'place' ? Game.data.placesById.get(c.targetId) : Game.data.stationsById.get(c.targetId);
-    const currentNode = Game.currentNode();
-    if (targetNode && currentNode) {
-      card.addEventListener('mouseenter', () => MapView.showCandidatePreview(currentNode, targetNode));
-      card.addEventListener('mouseleave', () => MapView.clearCandidatePreview());
-    }
-
-    list.appendChild(card);
-  });
+  const order = (window.Movement && Movement.CATEGORY_ORDER) || ['移動', '歴史', '自然', '温泉', '道の駅', 'その他'];
+  for (const cat of order) {
+    const items = byCategory.get(cat);
+    if (!items || items.length === 0) continue;
+    const group = document.createElement('div');
+    group.className = 'candidate-category';
+    const title = document.createElement('div');
+    title.className = 'candidate-category-title';
+    title.textContent = `${CATEGORY_ICON[cat] || '📍'} ${cat}`;
+    group.appendChild(title);
+    const row = document.createElement('div');
+    row.className = 'candidate-row';
+    items.forEach(c => row.appendChild(buildCandidateCard(c)));
+    group.appendChild(row);
+    list.appendChild(group);
+  }
 }
 
 function onWork() {
@@ -221,6 +268,14 @@ function onEat() {
 
 function onRest() {
   const result = Game.rest();
+  toast(result.message);
+  renderHud();
+  if (result.gameOver) { showGameOver(); return; }
+  renderCandidates();
+}
+
+function onOnsen() {
+  const result = Game.onsen();
   toast(result.message);
   renderHud();
   if (result.gameOver) { showGameOver(); return; }
