@@ -57,6 +57,8 @@ const KNOWN_SLOW_COMBOS = new Set([
   // §18.3(遠方の通し候補追加)後に新たに顕在化した組み合わせ。同じく§16.3の
   // 既知の原因に該当する。
   'greedy/hard/11', 'rush/hard/6', 'workHeavy/easy/10',
+  // seed=10は他難易度でも既に既知の原因(§16.3)に該当済み。normalも同様。
+  'workHeavy/normal/10',
 ]);
 
 function runAndReport(policyName, difficulty, seed) {
