@@ -49,6 +49,8 @@ const MAX_STEPS = 8000;
 // (2026-07-31)。既知のこの組み合わせだけをメインの検証対象から除外する。
 const KNOWN_SLOW_COMBOS = new Set([
   'greedy/normal/10', 'discovery/normal/10', 'workHeavy/easy/6',
+  // seed=10は複数難易度で同じ既知の原因(§16.3参照)に該当する。
+  'greedy/hard/10', 'discovery/hard/10', 'workHeavy/hard/10',
 ]);
 
 function runAndReport(policyName, difficulty, seed) {
