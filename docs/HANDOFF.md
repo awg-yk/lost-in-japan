@@ -1033,3 +1033,23 @@ stations=8,988件)。`python3 -m unittest discover -s tools -p "test_*.py"` →
 同じ既知の設計限界によるものと判断してよい(候補枠の分離等の対応方針は
 §13末尾を参照)。もし明らかに種類の異なる失敗(パースエラー・クラッシュ等)
 が出た場合は新規の不具合として調査すること。
+
+## 15. 世界文化遺産・港湾・フェリー航路・バス停留所の統合(2026-07-31)
+
+国土数値情報の追加4データセットを取り込んだ(`tools/import_kokudo_world_heritage.py`,
+`tools/import_kokudo_ferry_ports.py`, `tools/import_kokudo_bus_stops.py`)。
+
+- **世界文化遺産(A34)**: 構成資産点99件をplacesに追加(`type: world_heritage`)。
+- **定期旅客航路(N09)+港湾(C02)**: 全国駅データ化(§13)で失われていた港ノードを
+  復元。港ノード1,615件を`data/stations.json`に`type: "port"`で追加し、実際の
+  航路運賃・距離からフェリー接続(`mode: "ferry"`)を構成。運賃欠損時は距離ベースの
+  フォールバック式で補完。stations.jsonは合計10,603ノード(駅8,988+港1,615)。
+  全ノードが単一連結成分であることをBFSで確認済み(孤立ノード0件)。
+- **高速バス停留所(P36)**: `data/busStops.json`(9,224件)として保存のみ。
+  **`js/game.js`/`js/movement.js`の移動ロジックには一切組み込んでいない**
+  (ユーザー指示により、バスを移動手段として正式導入するのは次回以降のバランス
+  調整フェーズで行う)。
+
+`python3 tools/validate_data.py` → PASS(places=20,679件、stations=10,603件)。
+`npm test`の失敗件数・傾向は§13/§14と同じ既知の設計限界(観光地密度)による
+ものかを次回セッションで確認すること。
