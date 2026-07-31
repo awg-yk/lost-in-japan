@@ -19,6 +19,14 @@ const DIFFICULTY_PRESETS = {
 // 体力は「歩いた」ことによる身体的消耗のみで減少する(電車や飛行機に乗っている間は消耗しない)。
 const HUNGER_DECAY_PER_KM = 0.06;
 const STAMINA_DECAY_PER_KM_WALK = 1.1;
+// 2026-07-31: 全国駅・観光地データの拡張により、短距離の徒歩・乗り換えだけを
+// 繰り返す「足踏み」でも距離ベースの消耗がほとんど発生せず、資金さえあれば
+// 実質無期限に旅を続けられてしまうことが分かった(ユーザー指摘: 実際のプレイ
+// では数十〜数百ターンが現実的な範囲であるべき)。距離によらず「1手=一定の
+// 時間経過」による最低限の消耗を加え、進展の無い足踏みでも空腹・体力が
+// 着実に減っていくようにする。
+const HUNGER_DECAY_PER_MOVE_FLAT = 0.25;
+const STAMINA_DECAY_PER_MOVE_FLAT = 0.15;
 // ヒッチハイク失敗時は固定値ではなく、空腹・体力をその場で半分にする
 // (2026-07-30変更。js/game.js の chooseCandidate 内で `/= 2` として実装)。
 
@@ -37,19 +45,46 @@ const WORK_WAGE = 1000;
 const WORK_HUNGER_COST = 8;
 const WORK_STAMINA_COST = 15;
 const WORK_MAX_PER_NODE = 1;
+// 2026-07-31: WORK_MAX_PER_NODE(同一地点1回まで)は、観光地が94件だった頃は
+// 実質的な資金上限として機能していたが、全国2万件超に拡張された結果「毎回
+// 別の初めての観光地でアルバイトする」という寄り道を続けるだけで、1プレイの
+// 所持金が青天井に増え続けてしまう(実測シミュレーションで到着までに100万円
+// 超)。上記の移動固定消耗だけでは、稼いだお金で食事・温泉を無制限に賄えて
+// しまい resource切れによる決着を迎えられないため、ゲーム全体を通した
+// アルバイト回数にも上限を設ける。
+const WORK_MAX_TOTAL_PER_GAME = 15;
+// 2026-07-31: アルバイト上限だけでは不十分だった。実際の主犯は「新規発見した
+// 地点ごとにdiscoveryScoreベースの報酬(50〜200円程度)を毎回無条件に受け取れる」
+// onArrive()の仕様で、観光地が全国2万件超になった今、これ単体で数十万円規模の
+// 青天井収入源になっていた(実測: 1プレイで50万円超)。探索へのご褒美という
+// 趣旨自体は残しつつ、ゲーム全体で受け取れる発見報酬の合計に上限を設ける
+// (上限到達後もdiscoveredIds自体には引き続き加算され、既訪問扱い・既訪問地点の
+// 除外ロジックには影響しない。お金だけがそれ以上増えなくなる)。
+const DISCOVERY_REWARD_TOTAL_CAP = 8000;
 
 const RANDOM_EVENT_CHANCE = 0.25;
+// 2026-07-31: WORK_MAX_TOTAL_PER_GAME/DISCOVERY_REWARD_TOTAL_CAPと同じ理由
+// (全国データ拡張で手数が伸びるほど無制限に積み上がる収入源になっていた)で、
+// ランダムイベントによる収入合計にも上限を設ける。
+const RANDOM_EVENT_MONEY_TOTAL_CAP = 5000;
+function grantEventMoney(amount) {
+  const earned = Game.state.randomEventMoneyEarned || 0;
+  const grantable = Math.max(0, Math.min(amount, RANDOM_EVENT_MONEY_TOTAL_CAP - earned));
+  Game.state.money += grantable;
+  Game.state.randomEventMoneyEarned = earned + grantable;
+  return grantable;
+}
 // Phase3: §7.3の例(お金を拾う/地域グルメ/珍しい発見/地元イベント/ヒッチハイク成功)
 // を踏まえ、4種類から8種類に拡充した。全て正の効果か中立の演出のみとし、
 // 「発見の旅」の気分を損なわないようにしている(ネガティブなペナルティ演出は含めない)。
 const RANDOM_EVENTS = [
-  { weight: 3, apply: () => { const amount = 200 + Math.floor(Math.random() * 600); Game.state.money += amount; return `道端で ¥${amount} を拾った！`; } },
+  { weight: 3, apply: () => { const amount = grantEventMoney(200 + Math.floor(Math.random() * 600)); return amount > 0 ? `道端で ¥${amount} を拾った！` : '道端に落し物を見つけたが、既に十分な収入があったので届け出た。'; } },
   { weight: 3, apply: () => { Game.state.hunger = Math.min(100, Game.state.hunger + 20); return '地元のグルメを味見して、少しお腹が満たされた。'; } },
-  { weight: 2, apply: () => { const bonus = 50 + Math.floor(Math.random() * 100); Game.state.money += bonus; return `珍しいものを見つけてちょっとした収入(¥${bonus})になった。`; } },
+  { weight: 2, apply: () => { const bonus = grantEventMoney(50 + Math.floor(Math.random() * 100)); return bonus > 0 ? `珍しいものを見つけてちょっとした収入(¥${bonus})になった。` : '珍しいものを見つけた。旅の思い出が一つ増えた。'; } },
   { weight: 2, apply: () => '地元のイベントに遭遇した。旅の思い出が一つ増えた。' },
   { weight: 3, apply: () => { Game.state.stamina = Math.min(100, Game.state.stamina + 15); return 'ベンチで少し休ませてもらい、体力が少し回復した。'; } },
   { weight: 2, apply: () => { Game.state.hunger = Math.min(100, Game.state.hunger + 10); Game.state.stamina = Math.min(100, Game.state.stamina + 10); return '地元の人に手土産をもらった。'; } },
-  { weight: 2, apply: () => { const discount = 100 + Math.floor(Math.random() * 200); Game.state.money += discount; return `お得な情報を教えてもらい、¥${discount}分お得になった。`; } },
+  { weight: 2, apply: () => { const discount = grantEventMoney(100 + Math.floor(Math.random() * 200)); return discount > 0 ? `お得な情報を教えてもらい、¥${discount}分お得になった。` : 'お得な情報を教えてもらったが、もう十分な余裕があった。'; } },
   { weight: 1, apply: () => '道端で野生の生き物に遭遇した。旅の良い思い出になった。' },
 ];
 
@@ -110,6 +145,8 @@ const Game = {
       playTimeSec: 0,
       totalDistanceKm: 0,
       workedIds: [],
+      discoveryRewardEarned: 0,
+      randomEventMoneyEarned: 0,
       hitchhikeLocked: false,
       arrived: false,
     };
@@ -124,14 +161,20 @@ const Game = {
     if (!this.state.discoveredIds.includes(nodeId)) {
       this.state.discoveredIds.push(nodeId);
       const node = nodeType === 'place' ? this.data.placesById.get(nodeId) : this.data.stationsById.get(nodeId);
-      this.state.money += (node && node.reward) || 0;
+      const reward = (node && node.reward) || 0;
+      const earned = this.state.discoveryRewardEarned || 0;
+      const grantable = Math.max(0, Math.min(reward, DISCOVERY_REWARD_TOTAL_CAP - earned));
+      this.state.money += grantable;
+      this.state.discoveryRewardEarned = earned + grantable;
     }
   },
 
   getCandidates() {
     const history = this.state.moveHistory;
+    // movement.jsのRECENT_NODE_PENALTYが20手分の窓を見るため、それに合わせて集める
+    // (2026-07-31、長周期ループ対策。詳細はmovement.js側のコメント参照)。
     const recentNodeIds = [];
-    for (let i = history.length - 1; i >= 0 && recentNodeIds.length < 5; i--) {
+    for (let i = history.length - 1; i >= 0 && recentNodeIds.length < 40; i--) {
       recentNodeIds.push({ id: history[i].fromId, type: history[i].fromType });
     }
 
@@ -142,7 +185,12 @@ const Game = {
     // forceUnfilteredTransportもあったが、目的地方向の正しい候補が既にあるのに
     // 遠ざかる候補まで紛れ込む不具合の原因だったため2026-07-30に削除した。
     // movement.js側は「フィルタ後0件のときのみ」フィルタなしにフォールバックする)。
-    const RECENT_WINDOW = 8;
+    // 2026-07-31: 全国駅データ拡張(131→10,603ノード)で、短い2地点往復だけでなく
+    // 進行スコアがほぼ横並びのローカルな駅クラスタを巡る、より長い周回(8手を
+    // 超えるループ)が実際に発生することが分かった(例: 群馬県内の駅を約9手周期で
+    // 巡り続けて詰む実例をシミュレーションで検出)。8手の窓では周期がそれより
+    // 長いループを検知できないため、窓を広げた。
+    const RECENT_WINDOW = 40;
     const recentVisits = history.slice(-RECENT_WINDOW);
     const revisitCount = recentVisits.filter(m => m.toId === this.state.currentNodeId && m.toType === this.state.currentNodeType).length;
     const bannedTarget = revisitCount >= 3 && recentNodeIds[0] ? recentNodeIds[0] : null;
@@ -217,10 +265,11 @@ const Game = {
 
     // 空腹は移動手段によらず(移動時間の目安として)減少するが、
     // 体力は徒歩による身体的消耗としてのみ減少する。
-    s.hunger = Math.max(0, s.hunger - candidate.distanceKm * HUNGER_DECAY_PER_KM);
-    if (candidate.mode === 'walk') {
-      s.stamina = Math.max(0, s.stamina - candidate.distanceKm * STAMINA_DECAY_PER_KM_WALK);
-    }
+    // 距離に応じた消耗に加え、1手ごとの固定消耗(HUNGER/STAMINA_DECAY_PER_MOVE_FLAT)
+    // も加える(§上記コメント参照。短距離移動の繰り返しでも時間経過分は消耗させるため)。
+    s.hunger = Math.max(0, s.hunger - candidate.distanceKm * HUNGER_DECAY_PER_KM - HUNGER_DECAY_PER_MOVE_FLAT);
+    s.stamina = Math.max(0, s.stamina - STAMINA_DECAY_PER_MOVE_FLAT
+      - (candidate.mode === 'walk' ? candidate.distanceKm * STAMINA_DECAY_PER_KM_WALK : 0));
     s.totalDistanceKm += candidate.distanceKm;
 
     s.currentNodeId = candidate.targetId;
@@ -312,9 +361,13 @@ const Game = {
   //     訪れる動機付けのため。2026-07-30変更、旧仕様では交通ノードで働けた)。
   //   - 空腹・体力のどちらかが0のときは働けない(力尽きた状態での労働を禁止)。
   //   - 同一ノードでの労働回数はWORK_MAX_PER_NODE(観光名所の総数が増えたため1回)まで。
+  //   - ゲーム全体での労働回数もWORK_MAX_TOTAL_PER_GAMEまで(2026-07-31追加。
+  //     観光地が全国2万件超になり「毎回別の初めての地点で働く」という抜け道で
+  //     資金が実質無制限になってしまうことへの対処。詳細は同定数のコメント参照)。
   canWork() {
     if (!this.atSightseeingPlace()) return false;
     if (this.state.hunger <= 0 || this.state.stamina <= 0) return false;
+    if (this.state.workedIds.length >= WORK_MAX_TOTAL_PER_GAME) return false;
     return this.workCountAtCurrentNode() < WORK_MAX_PER_NODE;
   },
 
@@ -332,6 +385,8 @@ const Game = {
       staminaCost: WORK_STAMINA_COST,
       remaining: WORK_MAX_PER_NODE - this.workCountAtCurrentNode(),
       max: WORK_MAX_PER_NODE,
+      totalRemaining: Math.max(0, WORK_MAX_TOTAL_PER_GAME - this.state.workedIds.length),
+      totalMax: WORK_MAX_TOTAL_PER_GAME,
     };
   },
 

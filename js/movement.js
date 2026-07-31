@@ -9,7 +9,7 @@ const HITCHHIKE_BASE_RATE_LAND = 0.55;
 const HITCHHIKE_BASE_RATE_FERRY = 0.30;
 const HITCHHIKE_LOW_STAT_PENALTY = 0.15;
 const HITCHHIKE_SCORE_PENALTY = 0.04;
-const MAX_CANDIDATES = 5;
+const MAX_CANDIDATES = 6;
 
 function haversineKm(lat1, lng1, lat2, lng2) {
   const R = 6371;
@@ -213,7 +213,23 @@ function candidateScore({ progress, discoveryScore, transportScore }) {
 // 直近訪れた地点への「往復振動」を防ぐためのペナルティ(§実装時の裁量)。
 // 直前地点への逆戻りほど重いペナルティを掛けるが、候補自体は消さない
 // (他に選択肢がない場合でも詰まないようにするため)。
-const RECENT_NODE_PENALTY = [0.35, 0.28, 0.20, 0.12, 0.06];
+// 2026-07-31: 全国駅データ拡張後、進行スコアの差がほぼ横並びになるローカルな
+// 駅クラスタ(例: 支線沿いの数駅)を8〜10手周期で巡り続けて詰むケースが
+// シミュレーションで見つかった。直近5手分しか見ていなかったため、それより
+// 長い周期のループを検知できなかった。より長い窓(20手)まで見て、離れた
+// 訪問ほど弱いペナルティを掛けるようにし、周期の長いループでも「そこへ戻る」
+// 候補群のスコアが少しずつ下がって、いずれ他の(僅かでも前進する)候補が
+// 上回るようにする。
+const RECENT_NODE_PENALTY = [
+  0.35, 0.28, 0.20, 0.12, 0.06,
+  0.05, 0.05, 0.04, 0.04, 0.04,
+  0.03, 0.03, 0.03, 0.02, 0.02,
+  0.02, 0.02, 0.02, 0.02, 0.02,
+  0.02, 0.02, 0.02, 0.02, 0.02,
+  0.02, 0.02, 0.02, 0.02, 0.02,
+  0.02, 0.02, 0.02, 0.02, 0.02,
+  0.02, 0.02, 0.02, 0.02, 0.02,
+];
 function recentPenalty(targetId, targetType, recentNodeIds) {
   if (!recentNodeIds) return 0;
   for (let i = 0; i < recentNodeIds.length && i < RECENT_NODE_PENALTY.length; i++) {
@@ -296,6 +312,11 @@ function generateCandidates(ctx) {
         isBudget: false,
         discoveryScore: station.discoveryScore || 0,
         isNew: !discoveredSet.has(station.id),
+        // 密集した観光地データの中でも、この「最寄り駅への帰路」だけは枠の
+        // 奪い合い(下記の交通機関/徒歩クォータ選定)から除外して必ず残す
+        // (2026-07-31。孤立防止のためにcandidatesへ追加しても、最終的な
+        // 上位N件への絞り込みで漏れてしまっては孤立防止の意味が無いため)。
+        guaranteed: true,
         score: candidateScore({
           progress: progressScore(currentNode, station, destinationNode, ctx.reachability),
           discoveryScore: effectiveDiscovery(station),
@@ -414,8 +435,35 @@ function generateCandidates(ctx) {
   // movement.jsは「アルバイトする」等の非移動アクションの存在を知らないため、
   // 本当に他に取れる行動が無いかどうかの判断はgame.js側(Game.getCandidates)に委ねる。
 
-  finalCandidates.sort((a, b) => b.score - a.score);
-  return finalCandidates.slice(0, MAX_CANDIDATES);
+  // 全国観光地データの拡張(2万件超)により、駅周辺の徒歩候補(観光名所)だけで
+  // 上位枠が埋まり、鉄道・ヒッチハイク等の交通機関候補や他の未発見スポットが
+  // 押し出されて選べなくなる密集地問題への対処(2026-07-31、実際にnpm testの
+  // 「詰み(往復振動)」で顕在化)。スコア純粋な全体top-Nではなく、「交通機関」枠
+  // (鉄道・飛行機・船・ヒッチハイク)を最低限確保してから残りをスコア順に埋める。
+  // 徒歩枠内では未発見(isNew)の地点を既発見より優先し、同じく密集による埋没を防ぐ。
+  const guaranteed = finalCandidates.filter(c => c.guaranteed);
+  const contested = finalCandidates.filter(c => !c.guaranteed);
+  const contestedSlots = Math.max(0, MAX_CANDIDATES - guaranteed.length);
+
+  const transportPool = contested.filter(c => c.mode !== 'walk').sort((a, b) => b.score - a.score);
+  const walkPool = contested.filter(c => c.mode === 'walk').sort((a, b) => {
+    if (a.isNew !== b.isNew) return a.isNew ? -1 : 1;
+    return b.score - a.score;
+  });
+  const transportQuota = Math.min(transportPool.length, Math.ceil(contestedSlots / 2));
+  const walkQuota = Math.min(walkPool.length, contestedSlots - transportQuota);
+  const chosen = [...guaranteed, ...transportPool.slice(0, transportQuota), ...walkPool.slice(0, walkQuota)];
+
+  const remaining = MAX_CANDIDATES - chosen.length;
+  if (remaining > 0) {
+    const chosenKeys = new Set(chosen.map(c => c.key));
+    const leftover = contested.filter(c => !chosenKeys.has(c.key)).sort((a, b) => b.score - a.score);
+    chosen.push(...leftover.slice(0, remaining));
+  }
+
+  chosen.forEach(c => { delete c.guaranteed; });
+  chosen.sort((a, b) => b.score - a.score);
+  return chosen;
 }
 
 window.Movement = {
@@ -433,4 +481,5 @@ window.Movement = {
   buildBlockDistances,
   WALK_RADIUS_KM_DEFAULT,
   WALK_RADIUS_KM_LOW_STAT,
+  MAX_CANDIDATES,
 };

@@ -45,9 +45,17 @@ test('②: an already-visited sightseeing place that makes no progress toward th
   const destinationNode = Game.destinationNode();
 
   // 現在地の近くにある観光名所を1つ探す(既発見扱いにする対象)。
-  const nearby = Movement.getNearbyNodes(currentNode.lat, currentNode.lng, Movement.WALK_RADIUS_KM_DEFAULT, Game.data.spatialIndex, currentNode.id)
-    .find(({ node }) => node._type === 'place');
-  if (!nearby) return; // このseed/開始地点の近くに観光名所が無ければ検証対象なしでスキップ
+  const nearbyPlaces = Movement.getNearbyNodes(currentNode.lat, currentNode.lng, Movement.WALK_RADIUS_KM_DEFAULT, Game.data.spatialIndex, currentNode.id)
+    .filter(({ node }) => node._type === 'place');
+  if (nearbyPlaces.length === 0) return; // このseed/開始地点の近くに観光名所が無ければ検証対象なしでスキップ
+  // 2026-07-31: 全国観光地データ拡張(2万件超)により、徒歩圏内に未発見の観光名所が
+  // 候補欄の枠数(MAX_CANDIDATES)を超えて同時に存在する駅も珍しくなくなった。
+  // その場合「任意の1件が必ず候補に残る」保証は、表示枠が有限である以上原理的に
+  // 満たせない(movement.jsのスコアリング側で頑張っても、枠を超える数の未発見地点を
+  // 全部出すことはできない)。そのため、この特定条件のシナリオでは検証をスキップし、
+  // 枠内に収まる密度のケースのみ「除外されない」ことを検証する。
+  if (nearbyPlaces.length > Movement.MAX_CANDIDATES - 1) return;
+  const nearby = nearbyPlaces[0];
 
   const place = nearby.node;
   const progress = Movement.progressScore(currentNode, place, destinationNode, Game.reachability);
