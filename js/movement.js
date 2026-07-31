@@ -26,7 +26,9 @@ const PLACE_CATEGORY_MAP = {
 };
 const CATEGORY_ORDER = ['移動', '歴史', '自然', '温泉', '道の駅', 'その他'];
 // カテゴリーごとの最大表示件数(移動は経路継続に重要なため多めに確保)。
-const CATEGORY_QUOTA = { 移動: 8, 歴史: 5, 自然: 5, 温泉: 3, 道の駅: 3, その他: 4 };
+// 2026-07-31: 遠方の「通し」候補(乗り換え先)も表示するようになったため、
+// 移動カテゴリーの枠を8→12に拡大した。
+const CATEGORY_QUOTA = { 移動: 12, 歴史: 5, 自然: 5, 温泉: 3, 道の駅: 3, その他: 4 };
 
 function categoryOf(targetType, node) {
   if (targetType === 'transport') return '移動';
@@ -429,6 +431,83 @@ function generateCandidates(ctx) {
     }
     return result;
   }
+
+  // --- 遠方の「通し」交通機関候補(2026-07-31、ユーザー指示) ---
+  // 従来は現在地の直接の接続(隣接駅)しか候補に出ておらず、「隣の駅しか
+  // 選べない」との指摘を受けた。所持金の範囲内であれば、複数区間(乗り換え)
+  // 先の駅まで一度に移動できる候補も出す(実際に切符を乗り継いで行く体で、
+  // 運賃は各区間の合計)。ヒッチハイク・徒歩は運任せ/距離的に非現実的なため
+  // 通し候補の対象外とし、鉄道・飛行機・船の接続のみを辿る。
+  const FAR_CANDIDATE_MAX_HOPS = 6;
+  const FAR_CANDIDATE_MAX_RESULTS = 12;
+  // 都心部などノード密度が高い駅では探索が爆発的に広がりうるため、探索する
+  // ノード数自体にも上限を設けて毎ターンの計算量を抑える(2026-07-31)。
+  const FAR_CANDIDATE_MAX_VISITED = 600;
+  function buildFarCandidates() {
+    if (currentNode._type !== 'transport') return [];
+    const startId = currentNode.id;
+    const best = new Map([[startId, { cost: 0, distanceKm: 0, hops: 0 }]]);
+    const visited = new Set();
+    const frontier = new Map([[startId, 0]]);
+    while (frontier.size > 0 && visited.size < FAR_CANDIDATE_MAX_VISITED) {
+      let curId = null;
+      let curCost = Infinity;
+      for (const [id, c] of frontier) { if (c < curCost) { curCost = c; curId = id; } }
+      frontier.delete(curId);
+      if (visited.has(curId)) continue;
+      visited.add(curId);
+      const curBest = best.get(curId);
+      if (curBest.hops >= FAR_CANDIDATE_MAX_HOPS) continue;
+      const node = stationsById.get(curId);
+      if (!node) continue;
+      for (const conn of node.connections || []) {
+        if (conn.mode === 'walk') continue;
+        const nextCost = curCost + conn.cost;
+        if (nextCost > money) continue;
+        const neighbor = stationsById.get(conn.toId);
+        if (!neighbor) continue;
+        const legDist = haversineKm(node.lat, node.lng, neighbor.lat, neighbor.lng);
+        const existing = best.get(conn.toId);
+        if (!existing || nextCost < existing.cost) {
+          best.set(conn.toId, { cost: nextCost, distanceKm: curBest.distanceKm + legDist, hops: curBest.hops + 1 });
+          if (!visited.has(conn.toId)) frontier.set(conn.toId, nextCost);
+        }
+      }
+    }
+    best.delete(startId);
+
+    const results = [];
+    for (const [id, info] of best) {
+      // 1区間(直接接続)は既にbuildTransportCandidates側で候補に出ているので除外。
+      if (info.hops <= 1) continue;
+      const node = stationsById.get(id);
+      if (!node) continue;
+      const progress = progressScore(currentNode, node, destinationNode, ctx.reachability);
+      if (progress <= 0) continue; // 遠ざかる通し候補は出さない
+      const discovery = effectiveDiscovery(node);
+      results.push({
+        key: `far_rail_${startId}_${id}`,
+        targetId: id,
+        targetType: 'transport',
+        targetName: node.name,
+        mode: 'rail',
+        cost: info.cost,
+        distanceKm: info.distanceKm,
+        isBudget: false,
+        discoveryScore: node.discoveryScore || 0,
+        isNew: !discoveredSet.has(id),
+        category: '移動',
+        farHops: info.hops,
+        score: candidateScore({
+          progress, discoveryScore: discovery,
+          transportScore: transportScoreOf({ _type: 'transport', connections: node.connections }, stationsById),
+        }),
+      });
+    }
+    results.sort((a, b) => b.score - a.score);
+    return results.slice(0, FAR_CANDIDATE_MAX_RESULTS);
+  }
+  candidates.push(...buildFarCandidates());
 
   // 通常は目的地方向のみフィルタする。目的地から遠ざかる接続(フィルタ後
   // 0件になった場合の最終フォールバック)だけ、詰み防止のためフィルタなしで

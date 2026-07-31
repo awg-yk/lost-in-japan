@@ -73,6 +73,9 @@ function candidateMetaText(c) {
   const parts = [fmtKm(c.distanceKm)];
   if (c.mode === 'hitchhike') {
     parts.push(`成功率 ${Math.round(c.successRate * 100)}%`);
+  } else if (c.farHops > 1) {
+    // 複数区間(乗り換え)先までの通し候補(2026-07-31、ユーザー指示)。
+    parts.push(`乗り換え${c.farHops - 1}回`);
   } else if (c.cost > 0) {
     parts.push(c.isBudget ? '格安便' : MODE_LABEL[c.mode]);
   } else {
