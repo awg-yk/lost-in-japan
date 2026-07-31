@@ -44,13 +44,32 @@ html, body{
 
 /* Toast */
 #toast{
-  position:absolute; left:50%; bottom:calc(38vh); transform:translateX(-50%);
+  position:absolute; left:50%; bottom:calc(44vh); transform:translateX(-50%);
   z-index:1200; background: rgba(17,28,43,0.95); border:1px solid var(--panel-border);
   color:var(--text-main); padding:10px 18px; border-radius:10px; font-size:13px; max-width:86%;
   text-align:center; white-space:pre-line; box-shadow:0 6px 18px rgba(0,0,0,0.4);
   opacity:0; pointer-events:none; transition: opacity 0.25s ease;
 }
 #toast.show{ opacity:1; }
+
+/* 観光名所に到着した際、その地点についてのリンクを表示するパネル
+   (2026-07-31、ユーザー指示)。候補パネルのすぐ上、右寄せの小さなカードとして
+   表示し、地図の視界をなるべく邪魔しないようにする。*/
+#place-info-panel{
+  position:absolute; right:10px; bottom:calc(44vh + 10px); z-index:950;
+  background: var(--panel-bg); border:1px solid var(--panel-border); border-radius:12px;
+  padding:8px 10px; max-width:220px; box-shadow:0 6px 18px rgba(0,0,0,0.4);
+  backdrop-filter: blur(6px);
+}
+#place-info-panel.hidden{ display:none; }
+.place-info-name{ font-size:12px; font-weight:700; margin-bottom:6px; }
+.place-info-links{ display:flex; flex-direction:column; gap:4px; }
+.place-info-links a{
+  font-size:11px; color: var(--accent-indigo); text-decoration:none;
+  padding:4px 6px; border-radius:6px; background: rgba(255,255,255,0.06);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+}
+.place-info-links a:active{ background: rgba(255,255,255,0.14); }
 
 /* Candidate panel
    2026-07-31改定: 候補地をカテゴリー別(移動・歴史・自然・温泉・道の駅・その他)に

@@ -1282,3 +1282,32 @@ stations=8,988件)。`python3 -m unittest discover -s tools -p "test_*.py"` →
 `npm test`(fixes.test.js+fixes2.test.js)15件PASS。`regression.test.js`
 (重い方)は本セッション終了時点で実行中だった可能性があるため、次回
 セッション開始時に必ず結果を確認すること。
+
+### 18.4 追記: 観光名所到着時に情報リンクを表示
+
+ユーザーから「観光地に着いたら画面上にリンクを貼って、その地点の情報を
+見ることができるようにしたい」との要望があり対応した。
+
+`data/places.json`の`wikipediaUrl`/`officialUrl`フィールドは、実データの
+大半(全国20,679件中、wikipediaUrlがあるのは46件、officialUrlは151件のみ。
+国土数値情報由来のデータにはこれらのURLが元々含まれていないため)が空文字
+なので、それらが無い地点でも常にリンクを出せるよう以下の優先順で表示する
+(`main.js`の`placeInfoLinks()`):
+1. `wikipediaUrl`があればそれを直接使う
+2. 無ければWikipedia内検索へのリンク(`ja.wikipedia.org`の検索URL、地点名で
+   検索。記事が実在するかはこの環境からは検証できないが、無くても検索結果
+   ページが出るだけで壊れない)
+3. `officialUrl`があれば追加で表示
+4. 座標ベースのGoogleマップ検索リンク(常に有効)を必ず追加
+
+現在地が観光名所(`currentNodeType === 'place'`)のときだけ、右上に
+`#place-info-panel`として表示する(`renderCandidates()`内で
+`renderPlaceInfo()`を呼ぶことで、移動のたびに自動更新される)。すべて
+`target="_blank" rel="noopener noreferrer"`の外部リンク。
+
+このサンドボックスは`ja.wikipedia.org`・`google.com`へのネットワーク
+アクセスがブロックされているため、リンク先が実際に正しく開けるかは
+検証できていない(URLの形式が正しいことと、パネルの表示・動的更新は
+Playwrightで確認済み)。実際にGitHub Pages等で公開後、エンドユーザーの
+ブラウザからは通常のインターネットアクセスになるため問題なく開けるはず
+だが、次回セッションでの実機確認を推奨する。
