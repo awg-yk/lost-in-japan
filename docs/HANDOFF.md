@@ -863,3 +863,95 @@ Agentを3並列(各35駅担当)でバックグラウンド起動。完了した3
   mulberry32 PRNG、シード42で再現可能。Pythonのrandomと値は異なるが再現性要件は満たす)。
 - 再実行可能: `node tools/import_station_database.mjs`。取得した生データは
   `tools/.cache/station_database/`にキャッシュ(.gitignore対象)。
+
+---
+
+## 観光資源データ(国土数値情報 P12、2015年度版)の統合 (2026-07-31)
+
+`tools/import_kokudo_kanko_shigen.py` を新規追加し、ユーザーがアップロードした
+「国土数値情報 観光資源データ(P12、2015年度版)」ZIP(点データ、全国47都道府県・
+17,258件)を`data/places.json`に統合した。既存94件(手動データ)はそのまま残し、
+新規11,915件を追加(重複スキップ5,343件)、合計**12,009件**。
+
+### 主な設計判断
+- **カテゴリマッピング(`CATEGORY_MAP`)**: P12_005(観光資源区分名)は約97%が
+  「‐」(未分類)で、この場合は`local_spot`をデフォルトに割り当てた。分類済みの
+  区分は`tools/data_generator.py`の`CATEGORY_BASE`キーへマッピング(神社・寺院・
+  教会→shrine、山岳・高原・湿原・河川・海岸・郷土景観・自然現象・湖沼・岩石洞窟→
+  scenic_spot、温泉→onsen、城跡・城郭・宮殿→castle、博物館・美術館→art_museum、
+  動植物園・水族館→museum、庭園・公園・テーマ施設→park、建造物・史跡→
+  famous_facility、動物・植物・集落・食・年中行事・芸能イベント→local_spot)。
+  さらに`refine_type()`で名称に「寺」「院」「教会」を含む場合は`shrine`から
+  `temple`へ補正。結果: local_spot 16,894 / scenic_spot 173 / temple 49 /
+  onsen 33 / shrine 28 / famous_facility 23 / art_museum 19 / castle 18 /
+  park 18 / museum 3(新規候補17,258件の内訳)。
+- **discoveryScore/reward**: `tools/data_generator.py`の
+  `compute_discovery_score`/`compute_reward`をそのまま踏襲。`has_wikipedia=False`
+  固定(出典データにWikipedia有無の情報が無いため)、`osm_tag_count=4`固定
+  (OSMタグに相当する情報が無いため中庸値を採用)、乱数は`random.Random(42)`で
+  再現性を確保。
+- **重複除去**: 既存placesと同名、または300m未満の座標近接は除外
+  (`tools/data_generator.py`の`merge_new_places`と同じ閾値・ロジック。
+  1.7万件規模のためgridKeyベースの空間バケットで高速化した独自実装)。
+- **id**: 200000番台から新規採番(既存手動データ101〜、station_database取り込み後の
+  駅id 1〜9000番台のいずれとも重複しない領域)。
+- **nearestStationId**: gridKey空間バケット(0.1度、探索半径を段階的に拡大)で
+  高速に最寄り駅を割り当て、離島など稀に見つからない場合のみ全駅走査に
+  フォールバック(西表島・波照間島・与那国島・小笠原諸島など16件が該当したが、
+  最終的に全件割当済み)。
+- 再実行可能: `python3 tools/import_kokudo_kanko_shigen.py`。初回実行時にZIPを
+  `tools/.cache/kokudo_kanko_shigen/extracted/`へ展開してキャッシュする
+  (.gitignore対象。`--zip`でZIPパスを指定可能、省略時はアップロード時のデフォルト
+  パスを使う)。
+
+### 検証結果
+- `python3 tools/validate_data.py --data data` → PASS(places=12,009件,
+  stations=8,988件、スキーマ・孤立防止ルールともに問題なし)。
+- `python3 -m unittest discover -s tools -p "test_*.py"` → 23件PASS。
+- **性能**: `js/movement.js`の到達可能性Dijkstra(`buildGraphDistances`)は
+  交通ノードグラフ(stations、8,988件)のみを対象にしており、placesは
+  `connections`を持たないため計算対象に含まれない。したがってplaces件数の
+  増加(94→12,009)はDijkstra計算量に影響しない。地図描画・候補生成は元々
+  `gridKey`(0.1度)の空間インデックス(`js/movement.js`の`spatialIndex`、
+  `js/map.js`のボロノイ表示と同様の仕組み)を使っており、全件を毎回走査する
+  設計にはなっていないため、既存の仕組みのまま極端な速度劣化は起きていない
+  ことを確認した(`data/places.json`は4.3MB、既存`data/stations.json`の5.3MBと
+  同程度のスケール)。
+
+### 既知の課題(次セッションへの申し送り、重要)
+`npm test`(`tests/regression.test.js`)で**6件のテスト失敗**を確認した
+(`tests/fixes2.test.js`の④⑤系3件含む)。原因を調査したところ、データの
+不整合ではなく、**候補生成ロジック(`js/movement.js`の`generateCandidates`)が
+徒歩候補と交通機関候補を同一のスコア順リストに混ぜて上位`MAX_CANDIDATES`
+(=5件)だけを残す設計**になっていることが根本原因と判明した:
+- 観光名所が94→12,009件に激増したことで、都市部など地点密度の高いエリアでは
+  徒歩半径(既定8km)以内に未発見の観光名所が大量に存在するようになった。
+- `candidateScore = 0.4*progress + 0.4*(discoveryScore/100) + 0.15*transportScore
+  + ノイズ`の式では、進行度(progress)が多少マイナスでも`discoveryScore`が
+  高い徒歩候補が上位を占めやすく、鉄道・ヒッチハイク等の交通機関候補が
+  上位5件から押し出されてしまうケースが増えた。
+- 結果として`tests/fixes2.test.js`のヒッチハイク関連テスト(特定の接続への
+  ヒッチハイクが候補に出るはずのテスト)が失敗し、`tests/regression.test.js`
+  でも一部のseed(workHeavy/easy等)で「3000手以内に到着もゲームオーバーも
+  しない(振動の可能性)」という失敗が発生した。
+- **これはデータの問題ではなく、地点数が数百→1万件規模に増えることを
+  Phase1で当初から想定していた`js/movement.js`の候補選定ロジック側の
+  設計限界**だと考えられる(§5参照。以前から「地点数が増えれば労働機会も
+  自然に分散する」という前提で進めてきたが、候補選定の枠(5件)自体は
+  据え置きだったため、密度が上がるほど交通機関候補が埋もれやすくなる)。
+- 今回のセッションでは「観光地データの拡張のみ」がタスク範囲だったため、
+  `js/movement.js`のロジック自体(例: 徒歩候補と交通機関候補を別枠にする、
+  `MAX_CANDIDATES`を増やす、徒歩候補側にも件数上限を設ける、等)には
+  手を付けていない。次セッションでPhase3(バランス調整)として着手する際は
+  以下を検討すること:
+  1. 徒歩候補(place発見用)と交通機関候補(移動用)を候補枠として分離する
+     (UIの3x3グリッドは既に「休憩3枠+移動6枠」の構成になっているので、
+     同様に「発見(徒歩)/移動(交通機関)」で別枠を設ける案が自然)。
+  2. 徒歩候補側にも独自の上限(例: 半径内で discoveryScore 上位N件のみ)を
+     設けて、交通機関候補と混在しても埋もれないようにする。
+  3. `node tools/balance_harness.js`・`npm test`で再検証し、詰み
+     (stuck)・往復振動(unresolved)が解消することを確認する。
+- 参考までに`python3 -m unittest discover -s tools`(Pythonデータ生成側の
+  ユニットテスト)は今回のデータ変更の影響を受けず23件全てPASSしている。
+  失敗は`tests/`配下のNode側(実データを読み込んでゲームロジックを検証する
+  テスト)に限られる。
