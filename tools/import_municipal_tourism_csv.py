@@ -131,9 +131,10 @@ def parse_xlsx_bytes(data, source_label):
 
 def rows_to_records(rows, source_label):
     header = rows[0]
-    name_col = find_col(header, exact='名称') or find_col(header, exact='施設名')
-    lat_col = find_col(header, exact='緯度', prefix='緯度')
-    lng_col = find_col(header, exact='経度', prefix='経度')
+    name_col = (find_col(header, exact='名称') or find_col(header, exact='施設名')
+                or find_col(header, contains='名称'))
+    lat_col = find_col(header, exact='緯度', prefix='緯度') or find_col(header, contains='緯度')
+    lng_col = find_col(header, exact='経度', prefix='経度') or find_col(header, contains='経度')
     url_col = find_col(header, exact='URL', contains='URL')
     category_col = find_col(header, exact='分類')
     address_col = (find_col(header, contains='住所') or find_col(header, contains='所在地_連結表記')
