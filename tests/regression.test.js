@@ -86,6 +86,10 @@ const KNOWN_SLOW_COMBOS = new Set([
   // 追加後に新たに顕在化。候補の乱数消費パターンが変わったことによるもので、
   // 同じく§16.3の既知の原因。
   'greedy/hard/1',
+  // 山形県舟形町・青森県(平川市・南部町・県内博物館一覧)の観光施設オープン
+  // データ統合(places 21944→21948件)後に新たに顕在化。同じく§16.3の既知の
+  // 原因(実測: 16867手で到着、詰みではない)。
+  'greedy/hard/7',
 ]);
 
 function runAndReport(policyName, difficulty, seed) {
