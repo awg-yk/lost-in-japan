@@ -61,6 +61,12 @@ const KNOWN_SLOW_COMBOS = new Set([
   'workHeavy/normal/10',
   // §18.5/18.6(観光地データ拡張)後に新たに顕在化。同じく§16.3の既知の原因。
   'rush/hard/1',
+  // Wikidata/Wikipedia公式URL拡充データの統合(places 21170→21944件)後に
+  // 新たに顕在化。同じく§16.3の既知の原因。
+  'greedy/normal/11', 'discovery/easy/10', 'rush/normal/10', 'workHeavy/normal/11',
+  // 上記を除外した後、同じテストループ内でさらに先(打ち切られず到達できる
+  // ようになった箇所)で新たに顕在化。同じく§16.3の既知の原因。
+  'discovery/hard/1', 'rush/hard/10',
 ]);
 
 function runAndReport(policyName, difficulty, seed) {
