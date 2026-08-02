@@ -30,7 +30,6 @@ const Save = {
       hunger: state.hunger,
       stamina: state.stamina,
       totalDistanceKm: state.totalDistanceKm,
-      workedIds: state.workedIds,
       officialSiteViewedIds: state.officialSiteViewedIds,
       hitchhikeLocked: state.hitchhikeLocked,
       startId: state.startId,

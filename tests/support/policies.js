@@ -1,10 +1,10 @@
 // tests/support/policies.js
 //
 // docs/PHASE_PLAN.md のPhase3で使われた3種の疑似プレイヤー方策(greedy/discovery/rush)
-// を再現し、Phase5(回帰テスト)向けに追加でworkHeavy方策(アルバイト上限回数=3の
-// 検証用に、可能な限りアルバイトを優先して同一ノードで働き続けようとする)を用意する。
-// いずれも「移動候補の中から何を選ぶか」だけを決め、空腹/体力の生存行動(eat/rest)は
-// simulate.js側で共通の優先ロジックとして扱う。
+// を再現する。いずれも「移動候補の中から何を選ぶか」だけを決め、空腹/体力の
+// 生存行動(eat/rest)はsimulate.js側で共通の優先ロジックとして扱う。
+// 2026-08-02: 「アルバイトする」廃止に伴い、旧workHeavy方策(アルバイト優先の
+// 検証用)は前提が失われたため削除した。
 'use strict';
 
 const POLICIES = {
@@ -32,12 +32,6 @@ const POLICIES = {
     const withBonus = candidates.map(c => ({ c, adjusted: c.score + (c.mode !== 'walk' ? NON_WALK_BONUS : 0) }));
     withBonus.sort((a, b) => b.adjusted - a.adjusted);
     return withBonus.length > 0 ? withBonus[0].c : null;
-  },
-
-  // 移動選択自体はgreedyと同じ。simulate.js側のworkHeavyOverride と組み合わせて、
-  // 「同一ノードで働けるだけ働く」ケースを作るために使う。
-  workHeavy(candidates) {
-    return candidates[0] || null;
   },
 };
 

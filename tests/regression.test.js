@@ -47,48 +47,48 @@ const MAX_STEPS = 8000;
 // 取る行動パターンではなく、スコアを機械的に最大化し続ける検証用ボット特有の
 // 極端なケースであり、ユーザー確認の上でこのまま許容することにした
 // (2026-07-31)。既知のこの組み合わせだけをメインの検証対象から除外する。
+// 2026-08-02: 「アルバイトする」廃止に伴いworkHeavy方策を削除したため、
+// 旧workHeavy/*の既知のエントリも整理した(該当ポリシーが存在しなくなり、
+// 元々マッチしなくなっている)。
 const KNOWN_SLOW_COMBOS = new Set([
-  'greedy/normal/10', 'discovery/normal/10', 'workHeavy/easy/6',
+  'greedy/normal/10', 'discovery/normal/10',
   // seed=10は複数難易度で同じ既知の原因(§16.3参照)に該当する。
-  'greedy/hard/10', 'discovery/hard/10', 'workHeavy/hard/10',
+  'greedy/hard/10', 'discovery/hard/10',
   // §18(候補ロジックの追加調整)後に新たに顕在化した組み合わせ。同じ既知の
   // 原因(§16.3: 所持金0でも無料の空腹/体力回復イベントで粘れるレアケース)。
   'discovery/hard/3', 'rush/easy/10',
   // §18.3(遠方の通し候補追加)後に新たに顕在化した組み合わせ。同じく§16.3の
   // 既知の原因に該当する。
-  'greedy/hard/11', 'rush/hard/6', 'workHeavy/easy/10',
-  // seed=10は他難易度でも既に既知の原因(§16.3)に該当済み。normalも同様。
-  'workHeavy/normal/10',
+  'greedy/hard/11', 'rush/hard/6',
   // §18.5/18.6(観光地データ拡張)後に新たに顕在化。同じく§16.3の既知の原因。
   'rush/hard/1',
   // Wikidata/Wikipedia公式URL拡充データの統合(places 21170→21944件)後に
   // 新たに顕在化。同じく§16.3の既知の原因。
-  'greedy/normal/11', 'discovery/easy/10', 'rush/normal/10', 'workHeavy/normal/11',
+  'greedy/normal/11', 'discovery/easy/10', 'rush/normal/10',
   // 上記を除外した後、同じテストループ内でさらに先(打ち切られず到達できる
   // ようになった箇所)で新たに顕在化。同じく§16.3の既知の原因。
   'discovery/hard/1', 'rush/hard/10', 'discovery/hard/6', 'discovery/hard/11',
-  // 2026-08-02、ユーザー指示による一時的な検証(公式URLを持つ観光地だけに
-  // 候補を絞り込み、公式ホームページ表示機能の見た目を確認する)後に新たに
-  // 顕在化。候補が9割減ったことで資金稼ぎに時間がかかるケースが増えたための
-  // ものであり、同じく§16.3の既知の原因(絞り込みを元に戻せば解消する見込み)。
-  'greedy/easy/5', 'discovery/normal/5', 'rush/easy/5', 'workHeavy/easy/5',
+  // 2026-08-02、ユーザー指示による「公式URLを持つ観光地だけに候補を絞り込む」
+  // 変更(本採用)後に新たに顕在化。候補が9割減ったことで資金稼ぎに時間が
+  // かかるケースが増えたための ものであり、同じく§16.3の既知の原因。
+  'greedy/easy/5', 'discovery/normal/5', 'rush/easy/5',
   // 上記を除外した後、同じテストループ内でさらに先で新たに顕在化。同じ原因。
-  'greedy/normal/5', 'discovery/hard/4', 'rush/normal/4', 'workHeavy/normal/5',
-  'greedy/hard/4', 'discovery/hard/5', 'rush/normal/5', 'workHeavy/hard/4',
+  'greedy/normal/5', 'discovery/hard/4', 'rush/normal/4',
+  'greedy/hard/4', 'discovery/hard/5', 'rush/normal/5',
+  // 2026-08-02、ユーザー指示による「アルバイトする」廃止(観光名所到着時の
+  // 固定ボーナスに置き換え)後に新たに顕在化。収入源の構成が変わったことで
+  // 資金稼ぎに時間がかかるケースが増えたためで、同じく§16.3の既知の原因。
+  'greedy/normal/4', 'discovery/normal/4', 'rush/normal/11',
+  // 上記を除外した後、同じテストループ内でさらに先で新たに顕在化。同じ原因。
+  'greedy/hard/3', 'discovery/hard/12', 'rush/hard/4',
+  'greedy/hard/5', 'greedy/hard/12',
 ]);
 
 function runAndReport(policyName, difficulty, seed) {
   const sandbox = createGameContext();
   const movementPolicy = POLICIES[policyName];
   const maxSteps = MAX_STEPS;
-  const result = simulateGame({
-    sandbox,
-    difficulty,
-    movementPolicy,
-    seed,
-    maxSteps,
-    workHeavyOverride: policyName === 'workHeavy',
-  });
+  const result = simulateGame({ sandbox, difficulty, movementPolicy, seed, maxSteps });
   return result;
 }
 

@@ -110,30 +110,6 @@ function candidatePreviewText(c) {
   return `空腹 ${fmt(hungerLoss)} ・ 体力 ${fmt(staminaLoss)}`;
 }
 
-// ① アルバイトができない場合も候補として表示だけはし、薄い色にして選べなく
-// する(2026-07-31、ユーザー指示。押せない理由が分かりやすいように)。
-function buildWorkCard() {
-  const canWork = Game.canWork();
-  const preview = Game.workPreview();
-  const card = document.createElement('button');
-  card.className = 'candidate-card candidate-card--action' + (canWork ? '' : ' candidate-card--disabled');
-  card.disabled = !canWork;
-  const metaText = preview.totalRemaining <= 0
-    ? '今回の旅ではもう働けません'
-    : `ここであと${preview.remaining}回まで(全${preview.max}回・旅全体であと${preview.totalRemaining}回)`;
-  card.innerHTML = `
-    <div class="candidate-cost earn">+${fmtMoney(preview.wage)}</div>
-    <div class="candidate-icon">💼</div>
-    <div class="candidate-body">
-      <div class="candidate-name">アルバイトする</div>
-      <div class="candidate-meta">${metaText}</div>
-      <div class="candidate-preview">空腹 -${preview.hungerCost} ・ 体力 -${preview.staminaCost}</div>
-    </div>
-  `;
-  if (canWork) card.addEventListener('click', onWork);
-  return card;
-}
-
 // ② 食事も、選べない場合(所持金不足・満腹)は非表示にせず薄い色で表示する
 // (2026-07-31、ユーザー指示。アルバイトと同じ扱いに揃えた)。実際の地点ごとの
 // 飲食店データが無い暫定実装として、駅・空港・観光名所であれば一律に利用できる
@@ -226,47 +202,31 @@ function buildCandidateCard(c) {
 // ことで、候補地をたくさん表示できるようにした)。
 const CATEGORY_ICON = { 移動: '🧭', 歴史: '🏯', 自然: '🌲', 温泉: '♨️', 道の駅: '🅿️', その他: '📍' };
 
-// 観光名所に到着したら、公式ホームページへのリンクを画面上に表示する
-// (2026-08-02、ユーザー指示。以前あったWikipedia/Googleマップへのリンクは
-// 不要とのことで廃止)。公式URLを持つ地点でのみ表示し、リンクを開くと
-// 対価としてお金がもらえる(Game.viewOfficialSite()、1地点1回のみ)。
-function renderPlaceInfo() {
-  const panel = document.getElementById('place-info-panel');
-  if (!panel) return;
-  if (Game.state.currentNodeType !== 'place') {
-    panel.classList.add('hidden');
-    panel.innerHTML = '';
-    return;
-  }
-  const node = Game.currentNode();
-  if (!node || !node.officialUrl) {
-    panel.classList.add('hidden');
-    panel.innerHTML = '';
-    return;
-  }
+// 観光名所に到着したら、その地点のピン(現在地マーカー)に公式ホームページへの
+// リンクをポップアップとして表示する(2026-08-02、ユーザー指示。「ピンを打って
+// そこに公式URLを記載し、わかりやすい位置で表示」。以前の画面固定パネル・
+// Wikipedia/Googleマップへのリンクは廃止)。公式URLを持つ地点でのみ表示し、
+// リンクを開くと対価としてお金がもらえる(Game.viewOfficialSite()、1地点1回のみ)。
+function showOfficialSitePinIfAny(node) {
+  if (!node || !node.officialUrl) return;
   const alreadyViewed = Game.state.officialSiteViewedIds.includes(node.id);
   const label = alreadyViewed
     ? '🔗 公式ホームページ（確認済み）'
     : `🔗 公式ホームページを見る（+¥${OFFICIAL_SITE_VIEW_REWARD}）`;
-  panel.innerHTML = `
-    <div class="place-info-name">📍 ${node.name}</div>
-    <div class="place-info-links">
-      <a href="${node.officialUrl}" target="_blank" rel="noopener noreferrer" id="official-site-link">${label}</a>
+  const html = `
+    <div class="map-pin-official">
+      <div class="map-pin-official-name">📍 ${node.name}</div>
+      <a href="${node.officialUrl}" target="_blank" rel="noopener noreferrer" id="map-official-site-link">${label}</a>
     </div>
   `;
-  panel.classList.remove('hidden');
-
-  const link = document.getElementById('official-site-link');
-  if (link && !alreadyViewed) {
-    link.addEventListener('click', () => {
-      const result = Game.viewOfficialSite();
-      if (result.ok) {
-        toast(result.message);
-        renderHud();
-        renderPlaceInfo();
-      }
-    });
-  }
+  MapView.bindCurrentPopup(html, alreadyViewed ? null : () => {
+    const result = Game.viewOfficialSite();
+    if (result.ok) {
+      toast(result.message);
+      renderHud();
+      showOfficialSitePinIfAny(node);
+    }
+  });
 }
 
 // ポケモンの戦闘コマンド(たたかう/バッグ/ポケモン/にげる)のように、
@@ -304,8 +264,8 @@ function buildMainMenuButton(icon, label, count, onClick) {
 function renderMainMenu(list, byCategory) {
   const moveCount = (byCategory.get('移動') || []).length;
   const sightseeCount = SIGHTSEE_CATEGORIES.reduce((sum, cat) => sum + (byCategory.get(cat) || []).length, 0);
-  // 休憩メニューはアルバイト・食事・休憩・温泉のうち1つでも選べれば件数に数える。
-  const restCount = [Game.canWork(), Game.canAffordEat(), Game.canAffordRest(), Game.canAffordOnsen() || Game.atOnsen()]
+  // 休憩メニューは食事・休憩・温泉のうち1つでも選べれば件数に数える。
+  const restCount = [Game.canAffordEat(), Game.canAffordRest(), Game.canAffordOnsen() || Game.atOnsen()]
     .filter(Boolean).length;
 
   const menu = document.createElement('div');
@@ -365,7 +325,6 @@ function renderCategoryRows(list, byCategory, categories) {
 function renderRestMenu(list) {
   const actionRow = document.createElement('div');
   actionRow.className = 'candidate-row';
-  actionRow.appendChild(buildWorkCard());
   actionRow.appendChild(buildEatCard());
   actionRow.appendChild(buildRestCard());
   if (Game.canAffordOnsen() || Game.atOnsen()) actionRow.appendChild(buildOnsenCard());
@@ -373,7 +332,6 @@ function renderRestMenu(list) {
 }
 
 function renderCandidates() {
-  renderPlaceInfo();
   const list = document.getElementById('candidate-list');
   list.innerHTML = '';
   MapView.clearCandidatePreview();
@@ -403,15 +361,6 @@ function renderCandidates() {
 
 // ポケモンの戦闘メニューのように、行動を1つ選んだら次のターンはまた
 // 「移動する/観光する/休憩する」の一覧に戻す(2026-08-02、ユーザー指示)。
-function onWork() {
-  const result = Game.work();
-  toast(result.message);
-  renderHud();
-  if (result.gameOver) { showGameOver(); return; }
-  activeMenu = null;
-  renderCandidates();
-}
-
 function onEat() {
   const result = Game.eat();
   toast(result.message);
@@ -460,6 +409,7 @@ function onChooseCandidate(candidate) {
   const node = candidate.targetType === 'place' ? Game.data.placesById.get(candidate.targetId) : Game.data.stationsById.get(candidate.targetId);
   MapView.markVisited(node, candidate.isNew);
   MapView.setCurrent(node, true);
+  showOfficialSitePinIfAny(node);
 
   if (result.arrived) {
     showResult();
@@ -536,12 +486,6 @@ function setupResetButton() {
   });
 }
 
-function setupVoronoiButton() {
-  const btn = document.getElementById('fab-voronoi');
-  if (!btn) return;
-  btn.addEventListener('click', () => { MapView.toggleVoronoi(); });
-}
-
 function setupPlayAgain() {
   document.getElementById('btn-play-again').addEventListener('click', () => {
     hideOverlay('overlay-result');
@@ -585,7 +529,6 @@ async function init() {
   const data = await loadData();
   Game.init(data);
   MapView.init();
-  MapView.setStations(data.stationsById);
   setLoading(false);
 
   Save.clear();
@@ -593,7 +536,6 @@ async function init() {
 
   setupDifficultyButtons();
   setupResetButton();
-  setupVoronoiButton();
   setupPlayAgain();
   setupGameOverRetry();
   setupIntervals();

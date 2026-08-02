@@ -56,24 +56,18 @@ html, body{
 }
 #toast.show{ opacity:1; }
 
-/* 観光名所に到着した際、その地点についてのリンクを表示するパネル
-   (2026-07-31、ユーザー指示)。候補パネルのすぐ上、右寄せの小さなカードとして
-   表示し、地図の視界をなるべく邪魔しないようにする。*/
-#place-info-panel{
-  position:absolute; right:10px; bottom:calc(44vh + 10px); z-index:950;
-  background: var(--panel-bg); border:1px solid var(--panel-border); border-radius:12px;
-  padding:8px 10px; max-width:220px; box-shadow:0 6px 18px rgba(0,0,0,0.4);
-  backdrop-filter: blur(6px);
+/* 観光名所に到着した際、その地点のピン(現在地マーカー)に公式ホームページの
+   リンクをポップアップとして表示する(2026-08-02、ユーザー指示。以前は画面
+   固定位置のパネルだったが、「その地点にピンを打って、そこに公式URLを表示」
+   という指示により地図上のマーカーに直接ポップアップとして紐づけた)。
+   Leafletのポップアップに直接挿入されるHTML片のスタイル。 */
+.map-pin-official{ font-size:12px; }
+.map-pin-official-name{ font-weight:700; margin-bottom:6px; }
+.map-pin-official a{
+  display:inline-block; font-size:11px; color: var(--accent-indigo); text-decoration:none;
+  padding:5px 8px; border-radius:6px; background: rgba(30,144,255,0.12);
+  white-space:nowrap;
 }
-#place-info-panel.hidden{ display:none; }
-.place-info-name{ font-size:12px; font-weight:700; margin-bottom:6px; }
-.place-info-links{ display:flex; flex-direction:column; gap:4px; }
-.place-info-links a{
-  font-size:11px; color: var(--accent-indigo); text-decoration:none;
-  padding:4px 6px; border-radius:6px; background: rgba(255,255,255,0.06);
-  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
-}
-.place-info-links a:active{ background: rgba(255,255,255,0.14); }
 
 /* Candidate panel
    2026-07-31改定: 候補地をカテゴリー別(移動・歴史・自然・温泉・道の駅・その他)に
@@ -195,16 +189,6 @@ button.secondary{
   position:absolute; right:12px; bottom: calc(38vh + 12px); z-index:1000;
   background: rgba(17,28,43,0.9); border:1px solid var(--panel-border); color:var(--text-sub);
   font-size:11px; padding:8px 12px; border-radius:20px;
-}
-
-/* 駅サガース風「最寄り駅ボロノイ」表示トグル(js/map.js VoronoiLayer が制御) */
-#fab-voronoi{
-  position:absolute; right:12px; bottom: calc(38vh + 52px); z-index:1000;
-  background: rgba(17,28,43,0.9); border:1px solid var(--panel-border); color:var(--text-sub);
-  font-size:11px; padding:8px 12px; border-radius:20px;
-}
-#fab-voronoi.active{
-  background: rgba(30,144,255,0.35); border-color:#1E90FF; color:#fff;
 }
 
 #loading{

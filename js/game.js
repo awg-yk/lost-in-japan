@@ -50,31 +50,20 @@ const ONSEN_COST = 500;
 const OFFICIAL_SITE_VIEW_REWARD = 1000;
 const OFFICIAL_SITE_VIEW_REWARD_TOTAL_CAP = 10000;
 
-// アルバイト: 観光名所(地点データ)でのみ働ける(2026-07-30変更。旧仕様では
-// 駅・空港・港でも働けたが、それだと寄り道せず稼げてしまい「旅先の発見」という
-// 目的に反するため、観光名所限定にした)。同一ノードでの繰り返し労働を防ぐため
-// WORK_MAX_PER_NODEで上限を設けている(観光名所の総数が増えたため、旧仕様の
-// 3回から1回に引き下げ、稼ぐには別の観光名所に移動する必要があるようにした)。
-// また、空腹・体力のどちらかが0の状態では働けない(力尽きた状態での労働を禁止)。
-const WORK_WAGE = 1000;
-const WORK_HUNGER_COST = 8;
-const WORK_STAMINA_COST = 15;
-const WORK_MAX_PER_NODE = 1;
-// 2026-07-31: WORK_MAX_PER_NODE(同一地点1回まで)は、観光地が94件だった頃は
-// 実質的な資金上限として機能していたが、全国2万件超に拡張された結果「毎回
-// 別の初めての観光地でアルバイトする」という寄り道を続けるだけで、1プレイの
-// 所持金が青天井に増え続けてしまう(実測シミュレーションで到着までに100万円
-// 超)。上記の移動固定消耗だけでは、稼いだお金で食事・温泉を無制限に賄えて
-// しまい resource切れによる決着を迎えられないため、ゲーム全体を通した
-// アルバイト回数にも上限を設ける。
-const WORK_MAX_TOTAL_PER_GAME = 15;
-// 2026-07-31: アルバイト上限だけでは不十分だった。実際の主犯は「新規発見した
-// 地点ごとにdiscoveryScoreベースの報酬(50〜200円程度)を毎回無条件に受け取れる」
-// onArrive()の仕様で、観光地が全国2万件超になった今、これ単体で数十万円規模の
-// 青天井収入源になっていた(実測: 1プレイで50万円超)。探索へのご褒美という
-// 趣旨自体は残しつつ、ゲーム全体で受け取れる発見報酬の合計に上限を設ける
-// (上限到達後もdiscoveredIds自体には引き続き加算され、既訪問扱い・既訪問地点の
-// 除外ロジックには影響しない。お金だけがそれ以上増えなくなる)。
+// 2026-08-02、ユーザー指示により「アルバイトする」を廃止した(旧WORK_WAGE等の
+// 定数・canWork()/work()等のメソッドは削除済み)。代わりに、観光名所
+// (地点データ)へ到着すると自動的にボーナスがもらえる(PLACE_ARRIVAL_BONUS)。
+// これはonArrive()内の発見報酬(旧: discoveryScoreベースの可変額)を、
+// 観光名所に限り固定額へ置き換える形で実装している(駅・空港・港の発見報酬は
+// 従来どおりnode.rewardを使う)。
+const PLACE_ARRIVAL_BONUS = 1000;
+// 2026-07-31: 「新規発見した地点ごとにdiscoveryScoreベースの報酬(50〜200円
+// 程度)を毎回無条件に受け取れる」onArrive()の仕様が、観光地が全国2万件超に
+// なった今、これ単体で数十万円規模の青天井収入源になっていた(実測: 1プレイで
+// 50万円超)。探索へのご褒美という趣旨自体は残しつつ、ゲーム全体で受け取れる
+// 発見報酬の合計に上限を設ける(上限到達後もdiscoveredIds自体には引き続き
+// 加算され、既訪問扱い・既訪問地点の除外ロジックには影響しない。お金だけが
+// それ以上増えなくなる)。
 const DISCOVERY_REWARD_TOTAL_CAP = 8000;
 
 const RANDOM_EVENT_CHANCE = 0.25;
@@ -159,7 +148,6 @@ const Game = {
       moveHistory: [],
       playTimeSec: 0,
       totalDistanceKm: 0,
-      workedIds: [],
       discoveryRewardEarned: 0,
       randomEventMoneyEarned: 0,
       officialSiteViewedIds: [],
@@ -178,7 +166,9 @@ const Game = {
     if (!this.state.discoveredIds.includes(nodeId)) {
       this.state.discoveredIds.push(nodeId);
       const node = nodeType === 'place' ? this.data.placesById.get(nodeId) : this.data.stationsById.get(nodeId);
-      const reward = (node && node.reward) || 0;
+      // 観光名所は固定のPLACE_ARRIVAL_BONUS(2026-08-02、アルバイト廃止に伴う
+      // 置き換え)、駅・空港・港は従来どおりnode.rewardを使う。
+      const reward = nodeType === 'place' ? PLACE_ARRIVAL_BONUS : ((node && node.reward) || 0);
       const earned = this.state.discoveryRewardEarned || 0;
       const grantable = Math.max(0, Math.min(reward, DISCOVERY_REWARD_TOTAL_CAP - earned));
       this.state.money += grantable;
@@ -231,17 +221,11 @@ const Game = {
     const candidates = Movement.generateCandidates({ ...baseCtx, hitchhikeLocked: this.state.hitchhikeLocked });
 
     // 詰み回避の最終手段: ヒッチハイクがロックされていて、かつ他に取れる行動が
-    // 本当に何も無い(移動候補0件・アルバイトも食事も温泉も不可)場合のみ、ロックを
-    // 一時的に無視してヒッチハイクを候補に戻す。「アルバイトする/食事/温泉」という
+    // 本当に何も無い(移動候補0件・食事も温泉も不可)場合のみ、ロックを
+    // 一時的に無視してヒッチハイクを候補に戻す。「食事/温泉」という
     // movement.js側が知らない選択肢の有無を踏まえた判断のため、ここ(game.js)で行う。
-    //
-    // 注意: canWork()は現在、空腹・体力が0の場合や同一ノードでの労働回数上限
-    // (WORK_MAX_PER_NODE)に達した場合にもfalseを返す。そのため「!canWork()」だけを
-    // 条件にすると、実際には所持金があって食事・温泉で回復できる状況でも
-    // 不必要にヒッチハイクへ強制的に賭けさせてしまう。食事・温泉の可否も
-    // 併せて確認し、本当に他に取れる手段が無い場合に限定する。
     if (candidates.length === 0 && this.state.hitchhikeLocked &&
-        !this.canWork() && !this.canAffordEat() && !this.canAffordRest() && !this.canAffordOnsen()) {
+        !this.canAffordEat() && !this.canAffordRest() && !this.canAffordOnsen()) {
       return Movement.generateCandidates({ ...baseCtx, hitchhikeLocked: false });
     }
 
@@ -435,52 +419,9 @@ const Game = {
     };
   },
 
-  // アルバイト: 観光名所(地点データ)であれば働けるが、以下の条件で制限する。
-  //   - 駅・空港・港(交通ノード)では働けない(寄り道して観光名所を
-  //     訪れる動機付けのため。2026-07-30変更、旧仕様では交通ノードで働けた)。
-  //   - 空腹・体力のどちらかが0のときは働けない(力尽きた状態での労働を禁止)。
-  //   - 同一ノードでの労働回数はWORK_MAX_PER_NODE(観光名所の総数が増えたため1回)まで。
-  //   - ゲーム全体での労働回数もWORK_MAX_TOTAL_PER_GAMEまで(2026-07-31追加。
-  //     観光地が全国2万件超になり「毎回別の初めての地点で働く」という抜け道で
-  //     資金が実質無制限になってしまうことへの対処。詳細は同定数のコメント参照)。
-  canWork() {
-    if (!this.atSightseeingPlace()) return false;
-    if (this.state.hunger <= 0 || this.state.stamina <= 0) return false;
-    if (this.state.workedIds.length >= WORK_MAX_TOTAL_PER_GAME) return false;
-    return this.workCountAtCurrentNode() < WORK_MAX_PER_NODE;
-  },
-
-  // 現在地(観光名所)で、これまでに何回アルバイトしたか。
-  workCountAtCurrentNode() {
-    const id = this.state.currentNodeId;
-    return this.state.workedIds.filter(workedId => workedId === id).length;
-  },
-
-  // 候補リストに「アルバイトする」を出す際、選ぶ前に稼げる金額・消耗・残り回数を見せるためのプレビュー。
-  workPreview() {
-    return {
-      wage: WORK_WAGE,
-      hungerCost: WORK_HUNGER_COST,
-      staminaCost: WORK_STAMINA_COST,
-      remaining: WORK_MAX_PER_NODE - this.workCountAtCurrentNode(),
-      max: WORK_MAX_PER_NODE,
-      totalRemaining: Math.max(0, WORK_MAX_TOTAL_PER_GAME - this.state.workedIds.length),
-      totalMax: WORK_MAX_TOTAL_PER_GAME,
-    };
-  },
-
-  work() {
-    if (!this.canWork()) return { ok: false, message: 'ここでは働けません。' };
-    const node = this.currentNode();
-    this.state.money += WORK_WAGE;
-    this.state.workedIds.push(this.state.currentNodeId);
-    this.state.hunger = Math.max(0, this.state.hunger - WORK_HUNGER_COST);
-    this.state.stamina = Math.max(0, this.state.stamina - WORK_STAMINA_COST);
-    // アルバイトも「別の選択肢」の一つなので、ヒッチハイク失敗ロックを解除する。
-    this.state.hitchhikeLocked = false;
-    Save.write(this.state);
-    return { ok: true, message: `${node.name}でアルバイトして ¥${WORK_WAGE.toLocaleString()} 稼いだ(体力 -${WORK_STAMINA_COST} ・ 空腹 -${WORK_HUNGER_COST})。`, gameOver: this.checkGameOver() };
-  },
+  // 2026-08-02、ユーザー指示により「アルバイトする」(canWork/workPreview/work)
+  // を廃止した。観光名所到着時のPLACE_ARRIVAL_BONUS自動付与(onArrive参照)に
+  // 置き換えている。
 
   // 行動不能判定(2026-07-30、ユーザー指示による新規追加): 所持金が無く(0以下)、
   // かつ空腹・体力の両方が0の場合、これ以上取れる行動が実質無い
