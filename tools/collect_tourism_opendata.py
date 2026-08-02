@@ -1,8 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""data.go.jp(政府データカタログ、CKAN API)から全国の観光施設オープンデータを
-横断検索して一括ダウンロードし、import_municipal_tourism_csv.py にそのまま
-渡せる1つのzipにまとめる。
+"""data.go.jp(政府データカタログ、CKAN API)の全データセットをページングで
+走査し、観光施設っぽいCSV/XLSXを一括ダウンロードして
+import_municipal_tourism_csv.py にそのまま渡せる1つのzipにまとめる。
+
+【2026-08-02判明】data.go.jpのこのAPI(package_search)は q(全文検索)も
+fq(filter query)もサーバー側で一切効かず、常に全データセット(実測約18189件)
+をそのまま返すだけと判明した(ユーザー環境での実機検証で確認: q='観光'、
+q='zzzzznonsense12345'、fq='title:*観光*'、fq='res_format:CSV' がすべて
+同一件数・同一結果になった)。そのため検索語は使わず、全件をページングして
+タイトルの絞り込みはクライアント側(title_is_interesting、下記)で行う設計に
+している。全件走査になる分、素朴な検索より時間はかかる。
 
 【このスクリプトが存在する理由】
 Claude Code のサンドボックスからは data.go.jp・各自治体のオープンデータ
@@ -26,19 +34,24 @@ zipに入れる。取り込み時とまったく同じ判定を使うので、
 使い方(ユーザーのPC、リポジトリのルートで実行):
     python3 tools/collect_tourism_opendata.py
 
-    # 件数を絞って試す(まず動作確認したいとき)
-    python3 tools/collect_tourism_opendata.py --max-datasets 30
+    # 件数を絞って試す(まず動作確認したいとき。全件は約18000件あるので
+    # 最初は必ずこれで様子を見ることを推奨)
+    python3 tools/collect_tourism_opendata.py --max-datasets 300
 
-    # 検索語を足す
-    python3 tools/collect_tourism_opendata.py -q 観光施設 -q 観光スポット
+    # 途中で打ち切った/失敗した続きから再開する(--startはデータセットの
+    # 通し番号。実行中のログに出る「[走査] N〜M / 全T件」のNを指定する)
+    python3 tools/collect_tourism_opendata.py --start 3000
 
 完了すると tools/.cache/tourism_bundle.zip ができるので、それを1つ
 アップロードすればよい。取り込み側は従来どおり:
     python3 tools/import_municipal_tourism_csv.py --zip tools/.cache/tourism_bundle.zip \
         --data data --out data
 
-途中で止めても manifest.json に取得済みURLを記録しているので、再実行すると
-続きから再開する(同じファイルを何度も落としに行かない)。
+ダウンロード済みのURLは manifest.json に記録している(再実行してもDL済みの
+ファイルは飛ばす)が、全件走査そのものは --start を使わない限り毎回最初から
+やり直しになる点に注意(rows/startのページ送り自体は絞り込みが効かない
+ことの確認以前の設計のままなので、途中終了時は上記の--startで明示的に
+再開すること)。
 """
 
 import argparse
@@ -71,7 +84,6 @@ CKAN_SEARCH_ENDPOINTS = [
     'https://www.data.go.jp/api/3/action/package_search',
 ]
 
-DEFAULT_QUERIES = ['観光']
 # 「観光」で拾うと観光「客数」等の統計データも大量に混ざる。名称に以下を
 # 含むデータセット/リソースだけを対象にして無駄なダウンロードを減らす。
 TITLE_HINTS = ('観光', '施設', 'スポット', '名所', '見所', '文化財', '公園')
@@ -102,9 +114,16 @@ def http_get(url, timeout=60, retries=3):
     return None
 
 
-def ckan_search(query, rows, start):
-    """CKAN package_search を叩く。エンドポイントは順に試す。"""
-    params = urllib.parse.urlencode({'q': query, 'rows': rows, 'start': start})
+def ckan_search(rows, start):
+    """CKAN package_search を叩く。エンドポイントは順に試す。
+
+    2026-08-02判明: data.go.jpのこのエンドポイントは q/fq を渡しても
+    サーバー側で一切絞り込まず、常に全データセットをそのまま返す
+    (q='観光'・q='zzzzznonsense'・fq='title:*観光*' 等すべて同一件数・
+    同一結果になることをユーザー環境で実測確認済み)。そのため検索語は
+    送らず、全件をページングしてクライアント側(title_is_interesting)で
+    絞り込む方式に倒している。"""
+    params = urllib.parse.urlencode({'rows': rows, 'start': start})
     for base in CKAN_SEARCH_ENDPOINTS:
         data = http_get(f'{base}?{params}', timeout=60, retries=2)
         if not data:
@@ -260,83 +279,84 @@ def report_expected_new(out_dir, data_dir):
 def main():
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument('-q', '--query', action='append', default=[],
-                        help='CKANの検索語(複数指定可、既定: 観光)')
     parser.add_argument('--out-dir', type=Path, default=DEFAULT_OUT_DIR,
                         help='ダウンロード先ディレクトリ')
     parser.add_argument('--bundle', type=Path, default=DEFAULT_BUNDLE,
                         help='まとめる先のzipパス(これをアップロードする)')
     parser.add_argument('--max-datasets', type=int, default=0,
-                        help='処理するデータセット数の上限(0で無制限)')
-    parser.add_argument('--page-size', type=int, default=100, help='CKANの1回の取得件数')
-    parser.add_argument('--sleep', type=float, default=0.5,
+                        help='走査するデータセット数の上限(0で無制限、全約18000件を舐める)')
+    parser.add_argument('--start', type=int, default=0,
+                        help='途中から再開する場合の開始位置(データセット通し番号)')
+    parser.add_argument('--page-size', type=int, default=1000,
+                        help='CKANの1回の取得件数(qによる絞り込みが効かないため大きめが既定)')
+    parser.add_argument('--sleep', type=float, default=0.3,
                         help='ダウンロード間隔の秒数(相手サーバへの配慮)')
     parser.add_argument('--data', default='data', help='新規見込みの計算に使う既存データ')
     parser.add_argument('--no-report', action='store_true', help='新規見込みの計算を省く')
     args = parser.parse_args()
 
-    queries = args.query or DEFAULT_QUERIES
     out_dir = args.out_dir
     out_dir.mkdir(parents=True, exist_ok=True)
     manifest_path = out_dir / 'manifest.json'
     manifest = load_manifest(manifest_path)
     fetched = manifest['fetched']
 
-    print(f'検索語: {", ".join(queries)}')
+    print('data.go.jpの全データセットをページングして走査します'
+          '(q/fqによる絞り込みはサーバー側で効かないため、タイトル判定は'
+          'ローカル側で行います)。')
     kept = skipped_empty = already = 0
     processed_datasets = 0
-    stop = False
+    start = args.start
 
-    for query in queries:
-        if stop:
+    while True:
+        result = ckan_search(args.page_size, start)
+        if result is None:
+            print(f'[警告] CKAN取得に失敗しました(start={start})。'
+                  f'ネットワークかAPI仕様の変更が原因かもしれません。'
+                  f'--start {start} で再開できます。', file=sys.stderr)
             break
-        start = 0
-        while not stop:
-            result = ckan_search(query, args.page_size, start)
-            if result is None:
-                print(f'[警告] CKAN検索に失敗しました(q={query}, start={start})。'
-                      f'ネットワークかAPI仕様の変更が原因かもしれません。', file=sys.stderr)
-                break
-            datasets = result.get('results') or []
-            if not datasets:
-                break
-            count = result.get('count', 0)
-            print(f'\n[検索] q={query} {start + 1}〜{start + len(datasets)} / 全{count}件')
+        datasets = result.get('results') or []
+        if not datasets:
+            break
+        count = result.get('count', 0)
+        print(f'\n[走査] {start + 1}〜{start + len(datasets)} / 全{count}件'
+              f'  (採用{kept} / 空{skipped_empty} / 既取得skip{already})')
 
-            for ds in datasets:
-                processed_datasets += 1
-                if args.max_datasets and processed_datasets > args.max_datasets:
-                    stop = True
-                    break
-                for org, ds_title, res_name, url, ext in iter_resources(ds):
-                    if url in fetched:
-                        already += 1
-                        continue
-                    time.sleep(args.sleep)
-                    data = http_get(url)
-                    fetched[url] = True
-                    if not data:
-                        continue
-                    label = f'{org}/{ds_title}/{res_name}'
-                    fname = sanitize(f'{org}_{res_name or ds_title}') + ext
-                    n = usable_records(data, fname, label)
-                    if n <= 0:
-                        skipped_empty += 1
-                        continue
-                    dest = out_dir / fname
-                    i = 2
-                    while dest.exists():
-                        dest = out_dir / (sanitize(f'{org}_{res_name or ds_title}') + f'_{i}' + ext)
-                        i += 1
-                    dest.write_bytes(data)
-                    kept += 1
-                    print(f'  [採用] {dest.name} ({n}件) <- {ds_title}')
-
-            manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2),
-                                     encoding='utf-8')
-            start += len(datasets)
-            if start >= count:
+        stop = False
+        for ds in datasets:
+            processed_datasets += 1
+            if args.max_datasets and processed_datasets > args.max_datasets:
+                stop = True
                 break
+            for org, ds_title, res_name, url, ext in iter_resources(ds):
+                if url in fetched:
+                    already += 1
+                    continue
+                time.sleep(args.sleep)
+                data = http_get(url)
+                fetched[url] = True
+                if not data:
+                    continue
+                label = f'{org}/{ds_title}/{res_name}'
+                fname = sanitize(f'{org}_{res_name or ds_title}') + ext
+                n = usable_records(data, fname, label)
+                if n <= 0:
+                    skipped_empty += 1
+                    continue
+                dest = out_dir / fname
+                i = 2
+                while dest.exists():
+                    dest = out_dir / (sanitize(f'{org}_{res_name or ds_title}') + f'_{i}' + ext)
+                    i += 1
+                dest.write_bytes(data)
+                kept += 1
+                print(f'  [採用] {dest.name} ({n}件) <- {ds_title}')
+
+        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2),
+                                 encoding='utf-8')
+        start += len(datasets)
+        if stop or start >= count:
+            break
 
     manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2),
                              encoding='utf-8')
