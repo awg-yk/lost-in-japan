@@ -131,12 +131,13 @@ def parse_xlsx_bytes(data, source_label):
 
 def rows_to_records(rows, source_label):
     header = rows[0]
-    name_col = find_col(header, exact='名称')
+    name_col = find_col(header, exact='名称') or find_col(header, exact='施設名')
     lat_col = find_col(header, exact='緯度', prefix='緯度')
     lng_col = find_col(header, exact='経度', prefix='経度')
     url_col = find_col(header, exact='URL', contains='URL')
     category_col = find_col(header, exact='分類')
-    address_col = find_col(header, contains='住所') or find_col(header, contains='所在地_連結表記')
+    address_col = (find_col(header, contains='住所') or find_col(header, contains='所在地_連結表記')
+                   or find_col(header, exact='所在地'))
 
     if name_col is None or lat_col is None or lng_col is None:
         print(f'[警告] {source_label}: 名称/緯度/経度列が見つからず読み飛ばし (header={header[:6]}...)', file=sys.stderr)
@@ -183,9 +184,9 @@ def load_all_records(input_dir):
     return all_records
 
 
-def build_new_places(records, rng):
+def build_new_places(records, rng, start_id=NEW_ID_START):
     new_places = []
-    next_id = NEW_ID_START
+    next_id = start_id
     category_counts = {}
     seen_in_batch = set()  # (name, 0.001度丸め座標) で同一ファイル間の完全重複を除去
     for rec in records:
@@ -368,9 +369,12 @@ def main():
     records = load_all_records(input_dir)
     print(f'読み込んだレコード総数: {len(records)}件 (うち公式URLあり: {sum(1 for r in records if r["officialUrl"])}件)')
 
+    existing_int_ids = [p['id'] for p in existing_places if isinstance(p['id'], int)]
+    start_id = max(NEW_ID_START, max(existing_int_ids) + 1 if existing_int_ids else NEW_ID_START)
+
     rng = random.Random(args.seed)
-    new_places, category_counts = build_new_places(records, rng)
-    print(f'変換後の新規候補: {len(new_places)}件')
+    new_places, category_counts = build_new_places(records, rng, start_id=start_id)
+    print(f'変換後の新規候補: {len(new_places)}件 (id={start_id}〜)')
     print('カテゴリ別内訳(新規候補):')
     for k, v in sorted(category_counts.items(), key=lambda x: -x[1]):
         print(f'  {k}: {v}件')
