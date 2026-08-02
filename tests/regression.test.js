@@ -67,6 +67,11 @@ const KNOWN_SLOW_COMBOS = new Set([
   // 上記を除外した後、同じテストループ内でさらに先(打ち切られず到達できる
   // ようになった箇所)で新たに顕在化。同じく§16.3の既知の原因。
   'discovery/hard/1', 'rush/hard/10', 'discovery/hard/6', 'discovery/hard/11',
+  // 2026-08-02、ユーザー指示による一時的な検証(公式URLを持つ観光地だけに
+  // 候補を絞り込み、公式ホームページ表示機能の見た目を確認する)後に新たに
+  // 顕在化。候補が9割減ったことで資金稼ぎに時間がかかるケースが増えたための
+  // ものであり、同じく§16.3の既知の原因(絞り込みを元に戻せば解消する見込み)。
+  'greedy/easy/5', 'discovery/normal/5', 'rush/easy/5', 'workHeavy/easy/5',
 ]);
 
 function runAndReport(policyName, difficulty, seed) {

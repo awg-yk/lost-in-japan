@@ -287,8 +287,11 @@ function generateCandidates(ctx) {
   // (`node._type === 'place'`)への寄り道専用にする。現在地が観光名所の場合の
   // 「最寄り駅への帰路」だけは、駅ネットワークへ戻るために必要な例外として
   // 別途下で保証している。
+  // 2026-08-02、ユーザー指示: 観光地が多すぎるため、公式ホームページの表示
+  // 機能の確認も兼ねて、いったん公式URLを持つ観光地(現状約1,433件)だけを
+  // 候補に表示する。
   const nearby = getNearbyNodes(currentNode.lat, currentNode.lng, walkRadius, spatialIndex, currentNode.id)
-    .filter(({ node }) => node._type === 'place');
+    .filter(({ node }) => node._type === 'place' && !!node.officialUrl);
   for (const { node, distanceKm } of nearby) {
     // progressScoreにはctx.reachability(グラフ最短距離)を渡す(以前は未指定で
     // 常に直線距離フォールバックになっていた。Phase2の趣旨に沿って修正)。
