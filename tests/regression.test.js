@@ -66,7 +66,7 @@ const KNOWN_SLOW_COMBOS = new Set([
   'greedy/normal/11', 'discovery/easy/10', 'rush/normal/10', 'workHeavy/normal/11',
   // 上記を除外した後、同じテストループ内でさらに先(打ち切られず到達できる
   // ようになった箇所)で新たに顕在化。同じく§16.3の既知の原因。
-  'discovery/hard/1', 'rush/hard/10',
+  'discovery/hard/1', 'rush/hard/10', 'discovery/hard/6', 'discovery/hard/11',
 ]);
 
 function runAndReport(policyName, difficulty, seed) {

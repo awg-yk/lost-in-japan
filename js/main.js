@@ -210,25 +210,10 @@ function buildCandidateCard(c) {
 // ことで、候補地をたくさん表示できるようにした)。
 const CATEGORY_ICON = { 移動: '🧭', 歴史: '🏯', 自然: '🌲', 温泉: '♨️', 道の駅: '🅿️', その他: '📍' };
 
-// 観光名所に到着したら、その地点についてもっと調べられるリンクを画面上に
-// 表示する(2026-07-31、ユーザー指示)。実データにWikipedia/公式URLが
-// 紐づいている地点(現状ごく一部)はそれを使い、無い場合はWikipedia検索・
-// Googleマップ(座標ベース、常に有効)へのリンクにフォールバックする。
-function placeInfoLinks(node) {
-  const q = encodeURIComponent(node.name);
-  const links = [];
-  if (node.wikipediaUrl) {
-    links.push({ label: '📖 Wikipediaで見る', url: node.wikipediaUrl });
-  } else {
-    links.push({ label: '📖 Wikipediaで調べる', url: `https://ja.wikipedia.org/w/index.php?search=${q}&title=特別:検索&fulltext=1` });
-  }
-  if (node.officialUrl) {
-    links.push({ label: '🔗 公式サイト', url: node.officialUrl });
-  }
-  links.push({ label: '🗺️ Googleマップで見る', url: `https://www.google.com/maps/search/?api=1&query=${node.lat},${node.lng}` });
-  return links;
-}
-
+// 観光名所に到着したら、公式ホームページへのリンクを画面上に表示する
+// (2026-08-02、ユーザー指示。以前あったWikipedia/Googleマップへのリンクは
+// 不要とのことで廃止)。公式URLを持つ地点でのみ表示し、リンクを開くと
+// 対価としてお金がもらえる(Game.viewOfficialSite()、1地点1回のみ)。
 function renderPlaceInfo() {
   const panel = document.getElementById('place-info-panel');
   if (!panel) return;
@@ -238,19 +223,34 @@ function renderPlaceInfo() {
     return;
   }
   const node = Game.currentNode();
-  if (!node) {
+  if (!node || !node.officialUrl) {
     panel.classList.add('hidden');
     panel.innerHTML = '';
     return;
   }
-  const links = placeInfoLinks(node);
+  const alreadyViewed = Game.state.officialSiteViewedIds.includes(node.id);
+  const label = alreadyViewed
+    ? '🔗 公式ホームページ（確認済み）'
+    : `🔗 公式ホームページを見る（+¥${OFFICIAL_SITE_VIEW_REWARD}）`;
   panel.innerHTML = `
     <div class="place-info-name">📍 ${node.name}</div>
     <div class="place-info-links">
-      ${links.map(l => `<a href="${l.url}" target="_blank" rel="noopener noreferrer">${l.label}</a>`).join('')}
+      <a href="${node.officialUrl}" target="_blank" rel="noopener noreferrer" id="official-site-link">${label}</a>
     </div>
   `;
   panel.classList.remove('hidden');
+
+  const link = document.getElementById('official-site-link');
+  if (link && !alreadyViewed) {
+    link.addEventListener('click', () => {
+      const result = Game.viewOfficialSite();
+      if (result.ok) {
+        toast(result.message);
+        renderHud();
+        renderPlaceInfo();
+      }
+    });
+  }
 }
 
 function renderCandidates() {

@@ -43,6 +43,13 @@ const REST_STAMINA_GAIN = 45;
 const REST_HUNGER_GAIN = 10;
 const ONSEN_COST = 500;
 
+// 観光名所到着時に公式ホームページを見ると対価がもらえる(2026-08-02、
+// ユーザー指示)。他の収入源(発見報酬・ランダムイベント)と同じ理由で、
+// 1プレイ全体を通した合計に上限を設ける(公式URLを持つ地点だけを巡る
+// プレイで無制限の収入源にならないようにするため)。
+const OFFICIAL_SITE_VIEW_REWARD = 1000;
+const OFFICIAL_SITE_VIEW_REWARD_TOTAL_CAP = 10000;
+
 // アルバイト: 観光名所(地点データ)でのみ働ける(2026-07-30変更。旧仕様では
 // 駅・空港・港でも働けたが、それだと寄り道せず稼げてしまい「旅先の発見」という
 // 目的に反するため、観光名所限定にした)。同一ノードでの繰り返し労働を防ぐため
@@ -155,6 +162,8 @@ const Game = {
       workedIds: [],
       discoveryRewardEarned: 0,
       randomEventMoneyEarned: 0,
+      officialSiteViewedIds: [],
+      officialSiteRewardEarned: 0,
       hitchhikeLocked: false,
       arrived: false,
     };
@@ -396,6 +405,36 @@ const Game = {
     return { ok: true, message: `温泉に入って体力が全回復した(¥${ONSEN_COST})。`, gameOver: this.checkGameOver() };
   },
 
+  canViewOfficialSite() {
+    if (this.state.currentNodeType !== 'place') return false;
+    const node = this.currentNode();
+    return !!(node && node.officialUrl && !this.state.officialSiteViewedIds.includes(node.id));
+  },
+
+  // 観光名所到着時、公式ホームページを見た対価として一定額もらえる
+  // (2026-08-02、ユーザー指示)。同じ地点で二重に受け取れないよう
+  // officialSiteViewedIdsで管理し、ゲーム全体の合計にも上限を設ける。
+  viewOfficialSite() {
+    if (!this.canViewOfficialSite()) {
+      return { ok: false, message: 'ここでは公式ホームページの対価をもらえません。' };
+    }
+    const node = this.currentNode();
+    this.state.officialSiteViewedIds.push(node.id);
+    const earned = this.state.officialSiteRewardEarned || 0;
+    const grantable = Math.max(0, Math.min(OFFICIAL_SITE_VIEW_REWARD, OFFICIAL_SITE_VIEW_REWARD_TOTAL_CAP - earned));
+    this.state.money += grantable;
+    this.state.officialSiteRewardEarned = earned + grantable;
+    Save.write(this.state);
+    return {
+      ok: true,
+      message: grantable > 0
+        ? `公式ホームページを見て¥${grantable}もらった。`
+        : '公式ホームページを見た。',
+      url: node.officialUrl,
+      gameOver: this.checkGameOver(),
+    };
+  },
+
   // アルバイト: 観光名所(地点データ)であれば働けるが、以下の条件で制限する。
   //   - 駅・空港・港(交通ノード)では働けない(寄り道して観光名所を
   //     訪れる動機付けのため。2026-07-30変更、旧仕様では交通ノードで働けた)。
@@ -488,5 +527,6 @@ window.REST_COST = REST_COST;
 window.REST_STAMINA_GAIN = REST_STAMINA_GAIN;
 window.REST_HUNGER_GAIN = REST_HUNGER_GAIN;
 window.ONSEN_COST = ONSEN_COST;
+window.OFFICIAL_SITE_VIEW_REWARD = OFFICIAL_SITE_VIEW_REWARD;
 window.HUNGER_DECAY_PER_KM = HUNGER_DECAY_PER_KM;
 window.STAMINA_DECAY_PER_KM_WALK = STAMINA_DECAY_PER_KM_WALK;
