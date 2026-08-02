@@ -14,6 +14,14 @@
 <div id="hud">
   <div id="hud-inner">
     <div class="hud-title">帰宅ゲーム</div>
+    <div class="hud-stat hud-stat--address">
+      <span class="label">現在地</span>
+      <span class="value" id="stat-current-address">--</span>
+    </div>
+    <div class="hud-stat hud-stat--address">
+      <span class="label">目的地</span>
+      <span class="value" id="stat-destination-address">--</span>
+    </div>
     <div class="hud-stat">
       <span class="label">目的地まで(直線)</span>
       <span class="value" id="stat-distance">-- km</span>
@@ -44,7 +52,6 @@
 <div id="place-info-panel" class="hidden"></div>
 
 <div id="candidate-panel" class="hidden">
-  <h3>次にどこへ行く？(候補は上位のみ表示)</h3>
   <div id="candidate-list"></div>
 </div>
 

@@ -55,6 +55,20 @@ async function loadData() {
   };
 }
 
+// 都道府県レベルの簡易「住所」表示(2026-08-02、ユーザー指示)。stations.jsonは
+// 大半(約93%)にprefectureがあるが、places.json側はほぼ無い(取り込んだ
+// データソースにその情報が乏しいため)ので、観光名所にいる場合は最寄り駅の
+// prefectureで代用する。それでも不明な場合は地名だけを表示する。
+function addressOf(node, nodeType) {
+  if (!node) return '--';
+  let prefecture = node.prefecture;
+  if (!prefecture && nodeType === 'place' && node.nearestStationId) {
+    const station = Game.data.stationsById.get(node.nearestStationId);
+    prefecture = station && station.prefecture;
+  }
+  return prefecture ? `${prefecture} ${node.name}` : node.name;
+}
+
 function renderHud() {
   const s = Game.state;
   const dest = Game.destinationNode();
@@ -63,6 +77,8 @@ function renderHud() {
     const d = Movement.haversineKm(cur.lat, cur.lng, dest.lat, dest.lng);
     document.getElementById('stat-distance').textContent = fmtKm(d);
   }
+  document.getElementById('stat-current-address').textContent = addressOf(cur, s.currentNodeType);
+  document.getElementById('stat-destination-address').textContent = addressOf(dest, 'transport');
   document.getElementById('stat-money').textContent = fmtMoney(s.money);
   document.getElementById('stat-time').textContent = fmtTime(s.playTimeSec);
   document.getElementById('gauge-hunger').style.width = s.hunger + '%';
@@ -253,43 +269,76 @@ function renderPlaceInfo() {
   }
 }
 
-function renderCandidates() {
-  renderPlaceInfo();
-  const list = document.getElementById('candidate-list');
-  list.innerHTML = '';
-  MapView.clearCandidatePreview();
-  const candidates = Game.getCandidates();
-  // ①②: アルバイト・食事・休憩は選べない場合も表示だけして薄い色にする
-  // (2026-07-31、ユーザー指示)。温泉は温泉施設でのみ意味を持つ行動のため、
-  // 引き続き該当施設にいるときだけ表示する(押しても常に意味の無いカードを
-  // 全国どこでも表示し続けるのは冗長なため)。
-  const actionRow = document.createElement('div');
-  actionRow.className = 'candidate-row';
-  actionRow.appendChild(buildWorkCard());
-  actionRow.appendChild(buildEatCard());
-  actionRow.appendChild(buildRestCard());
-  if (Game.canAffordOnsen() || Game.atOnsen()) actionRow.appendChild(buildOnsenCard());
-  list.appendChild(actionRow);
+// ポケモンの戦闘コマンド(たたかう/バッグ/ポケモン/にげる)のように、
+// まず「移動する/観光する/休憩する」の3択を出し、選んだ先で具体的な候補
+// (技名に相当)を表示する2段階のメニューにする(2026-08-02、ユーザー指示)。
+// activeMenuはUIだけの状態で、Game.stateには含めない(セーブ不要・行動の
+// たびに一覧へ戻したいため)。
+let activeMenu = null; // null(一覧) | 'move' | 'sightsee' | 'rest'
+const SIGHTSEE_CATEGORIES = ['歴史', '自然', '温泉', '道の駅', 'その他'];
 
-  if (candidates.length === 0) {
-    const empty = document.createElement('div');
-    empty.className = 'candidate-meta';
-    empty.textContent = '近くに移動できる場所が見つかりません。';
-    list.appendChild(empty);
-    return;
-  }
-
+function groupCandidatesByCategory(candidates) {
   const byCategory = new Map();
   for (const c of candidates) {
     const cat = c.category || 'その他';
     if (!byCategory.has(cat)) byCategory.set(cat, []);
     byCategory.get(cat).push(c);
   }
+  return byCategory;
+}
 
+function buildMainMenuButton(icon, label, count, onClick) {
+  const btn = document.createElement('button');
+  const disabled = count === 0;
+  btn.className = 'main-menu-btn' + (disabled ? ' main-menu-btn--disabled' : '');
+  btn.disabled = disabled;
+  btn.innerHTML = `
+    <span class="main-menu-icon">${icon}</span>
+    <span class="main-menu-label">${label}</span>
+    <span class="main-menu-count">${count}件</span>
+  `;
+  if (!disabled) btn.addEventListener('click', onClick);
+  return btn;
+}
+
+function renderMainMenu(list, byCategory) {
+  const moveCount = (byCategory.get('移動') || []).length;
+  const sightseeCount = SIGHTSEE_CATEGORIES.reduce((sum, cat) => sum + (byCategory.get(cat) || []).length, 0);
+  // 休憩メニューはアルバイト・食事・休憩・温泉のうち1つでも選べれば件数に数える。
+  const restCount = [Game.canWork(), Game.canAffordEat(), Game.canAffordRest(), Game.canAffordOnsen() || Game.atOnsen()]
+    .filter(Boolean).length;
+
+  const menu = document.createElement('div');
+  menu.className = 'main-menu';
+  menu.appendChild(buildMainMenuButton('🧭', '移動する', moveCount, () => { activeMenu = 'move'; renderCandidates(); }));
+  menu.appendChild(buildMainMenuButton('🏯', '観光する', sightseeCount, () => { activeMenu = 'sightsee'; renderCandidates(); }));
+  menu.appendChild(buildMainMenuButton('💺', '休憩する', restCount, () => { activeMenu = 'rest'; renderCandidates(); }));
+  list.appendChild(menu);
+}
+
+function renderBackBar(list, title) {
+  const bar = document.createElement('div');
+  bar.className = 'menu-back-bar';
+  const backBtn = document.createElement('button');
+  backBtn.className = 'menu-back-btn';
+  backBtn.textContent = '← 戻る';
+  backBtn.addEventListener('click', () => { activeMenu = null; renderCandidates(); });
+  bar.appendChild(backBtn);
+  const titleEl = document.createElement('span');
+  titleEl.className = 'menu-back-title';
+  titleEl.textContent = title;
+  bar.appendChild(titleEl);
+  list.appendChild(bar);
+}
+
+function renderCategoryRows(list, byCategory, categories) {
   const order = (window.Movement && Movement.CATEGORY_ORDER) || ['移動', '歴史', '自然', '温泉', '道の駅', 'その他'];
+  let any = false;
   for (const cat of order) {
+    if (!categories.includes(cat)) continue;
     const items = byCategory.get(cat);
     if (!items || items.length === 0) continue;
+    any = true;
     const group = document.createElement('div');
     group.className = 'candidate-category';
     const title = document.createElement('div');
@@ -305,13 +354,61 @@ function renderCandidates() {
     group.appendChild(row);
     list.appendChild(group);
   }
+  if (!any) {
+    const empty = document.createElement('div');
+    empty.className = 'candidate-meta';
+    empty.textContent = '候補が見つかりません。';
+    list.appendChild(empty);
+  }
 }
 
+function renderRestMenu(list) {
+  const actionRow = document.createElement('div');
+  actionRow.className = 'candidate-row';
+  actionRow.appendChild(buildWorkCard());
+  actionRow.appendChild(buildEatCard());
+  actionRow.appendChild(buildRestCard());
+  if (Game.canAffordOnsen() || Game.atOnsen()) actionRow.appendChild(buildOnsenCard());
+  list.appendChild(actionRow);
+}
+
+function renderCandidates() {
+  renderPlaceInfo();
+  const list = document.getElementById('candidate-list');
+  list.innerHTML = '';
+  MapView.clearCandidatePreview();
+  const candidates = Game.getCandidates();
+  const byCategory = groupCandidatesByCategory(candidates);
+
+  if (activeMenu === null) {
+    renderMainMenu(list, byCategory);
+    return;
+  }
+  if (activeMenu === 'move') {
+    renderBackBar(list, '🧭 移動する');
+    renderCategoryRows(list, byCategory, ['移動']);
+    return;
+  }
+  if (activeMenu === 'sightsee') {
+    renderBackBar(list, '🏯 観光する');
+    renderCategoryRows(list, byCategory, SIGHTSEE_CATEGORIES);
+    return;
+  }
+  if (activeMenu === 'rest') {
+    renderBackBar(list, '💺 休憩する');
+    renderRestMenu(list);
+    return;
+  }
+}
+
+// ポケモンの戦闘メニューのように、行動を1つ選んだら次のターンはまた
+// 「移動する/観光する/休憩する」の一覧に戻す(2026-08-02、ユーザー指示)。
 function onWork() {
   const result = Game.work();
   toast(result.message);
   renderHud();
   if (result.gameOver) { showGameOver(); return; }
+  activeMenu = null;
   renderCandidates();
 }
 
@@ -320,6 +417,7 @@ function onEat() {
   toast(result.message);
   renderHud();
   if (result.gameOver) { showGameOver(); return; }
+  activeMenu = null;
   renderCandidates();
 }
 
@@ -328,6 +426,7 @@ function onRest() {
   toast(result.message);
   renderHud();
   if (result.gameOver) { showGameOver(); return; }
+  activeMenu = null;
   renderCandidates();
 }
 
@@ -336,6 +435,7 @@ function onOnsen() {
   toast(result.message);
   renderHud();
   if (result.gameOver) { showGameOver(); return; }
+  activeMenu = null;
   renderCandidates();
 }
 
@@ -352,6 +452,7 @@ function onChooseCandidate(candidate) {
   // ヒッチハイク失敗や所持金不足の場合は現在地が変わっていないため、
   // 地図上のマーカーも動かさない(移動した見た目にならないようにする)。
   if (!result.ok) {
+    activeMenu = null;
     renderCandidates();
     return;
   }
@@ -364,6 +465,7 @@ function onChooseCandidate(candidate) {
     showResult();
     return;
   }
+  activeMenu = null;
   renderCandidates();
 }
 
@@ -415,6 +517,7 @@ function renderNewGameOnMap() {
 
 function startNewGame(difficulty) {
   Game.newGame(difficulty);
+  activeMenu = null;
   MapView.clearRoute();
   MapView.visitedLayer.clearLayers();
   renderNewGameOnMap();

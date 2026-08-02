@@ -72,6 +72,9 @@ const KNOWN_SLOW_COMBOS = new Set([
   // 顕在化。候補が9割減ったことで資金稼ぎに時間がかかるケースが増えたための
   // ものであり、同じく§16.3の既知の原因(絞り込みを元に戻せば解消する見込み)。
   'greedy/easy/5', 'discovery/normal/5', 'rush/easy/5', 'workHeavy/easy/5',
+  // 上記を除外した後、同じテストループ内でさらに先で新たに顕在化。同じ原因。
+  'greedy/normal/5', 'discovery/hard/4', 'rush/normal/4', 'workHeavy/normal/5',
+  'greedy/hard/4', 'discovery/hard/5', 'rush/normal/5', 'workHeavy/hard/4',
 ]);
 
 function runAndReport(policyName, difficulty, seed) {

@@ -34,6 +34,10 @@ html, body{
 }
 .hud-title{ font-weight:700; font-size:14px; letter-spacing:0.05em; white-space:nowrap; margin-right:4px; }
 .hud-stat{ display:flex; flex-direction:column; gap:2px; min-width:74px; }
+/* 現在地/目的地の住所表示(2026-08-02、ユーザー指示)。都道府県レベルの
+   簡易表示なので、他のステータスより少し幅を取れるようにしておく。 */
+.hud-stat--address{ min-width:104px; max-width:150px; }
+.hud-stat--address .value{ font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .hud-stat .label{ font-size:10px; color:var(--text-sub); }
 .hud-stat .value{ font-size:15px; font-weight:700; font-variant-numeric: tabular-nums; }
 .gauge-wrap{ width:84px; }
@@ -120,6 +124,28 @@ html, body{
 .candidate-cost.earn{ color: var(--accent-green); }
 .candidate-preview{ font-size:8px; color: var(--text-sub); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .candidate-cost .cost-label{ font-size:8px; font-weight:600; color: var(--text-sub); margin-right:2px; }
+
+/* ポケモンの戦闘コマンドのような「移動する/観光する/休憩する」の3択メニュー
+   (2026-08-02、ユーザー指示)。 */
+.main-menu{ display:flex; gap:8px; padding:4px 0; }
+.main-menu-btn{
+  flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;
+  padding:14px 8px; border-radius:12px; border:1px solid var(--panel-border);
+  background: rgba(255,255,255,0.06); color:var(--text-main);
+}
+.main-menu-btn:active{ background: rgba(255,255,255,0.12); }
+.main-menu-btn--disabled{ opacity:0.4; filter:grayscale(70%); pointer-events:none; }
+.main-menu-icon{ font-size:22px; line-height:1; }
+.main-menu-label{ font-size:13px; font-weight:700; }
+.main-menu-count{ font-size:10px; color:var(--text-sub); }
+
+.menu-back-bar{ display:flex; align-items:center; gap:8px; padding:2px 0 6px 0; }
+.menu-back-btn{
+  border:1px solid var(--panel-border); background: rgba(255,255,255,0.06); color:var(--text-main);
+  font-size:11px; padding:6px 10px; border-radius:8px;
+}
+.menu-back-btn:active{ background: rgba(255,255,255,0.12); }
+.menu-back-title{ font-size:12px; font-weight:700; color:var(--text-sub); }
 
 /* 「休憩」(アルバイト・食事・休憩・温泉)行と「移動」系カテゴリーの行を
    アクセント線の色で視覚的に区別する(押し間違い防止のためのユーザー指示)。 */
