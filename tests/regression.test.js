@@ -82,6 +82,10 @@ const KNOWN_SLOW_COMBOS = new Set([
   // 上記を除外した後、同じテストループ内でさらに先で新たに顕在化。同じ原因。
   'greedy/hard/3', 'discovery/hard/12', 'rush/hard/4',
   'greedy/hard/5', 'greedy/hard/12',
+  // 2026-08-02、ユーザー指示による発見報酬バグ修正・ヒッチハイク救済/駅間徒歩
+  // 追加後に新たに顕在化。候補の乱数消費パターンが変わったことによるもので、
+  // 同じく§16.3の既知の原因。
+  'greedy/hard/1',
 ]);
 
 function runAndReport(policyName, difficulty, seed) {

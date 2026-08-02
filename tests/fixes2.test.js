@@ -116,7 +116,9 @@ test('③: backward-progress transport candidates never appear when forward-prog
 
     // 徒歩候補(mode==='walk')は寄り道として意図的にフィルタ対象外(進行方向を
     // 問わず候補に出る仕様)なので、鉄道・飛行機・船・ヒッチハイクの接続のみを見る。
-    const transportCandidates = candidates.filter(c => c.targetType === 'transport' && c.mode !== 'walk');
+    // moneyRescue(2026-08-02追加、お金が尽きたときの「一番近い稼げる場所への
+    // ヒッチハイク」)も、目的地方向とは無関係に出る仕様のため対象外とする。
+    const transportCandidates = candidates.filter(c => c.targetType === 'transport' && c.mode !== 'walk' && !c.moneyRescue);
     if (transportCandidates.length === 0) continue;
     checkedAny = true;
     for (const c of transportCandidates) {

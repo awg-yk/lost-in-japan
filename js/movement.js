@@ -279,19 +279,16 @@ function generateCandidates(ctx) {
     return discoveredSet.has(node.id) ? 0 : (node.discoveryScore || 0);
   }
 
-  // --- 徒歩候補(観光名所への寄り道のみ。2026-07-31、ユーザー指示) ---
-  // 以前は徒歩圏内の駅・港(交通ノード)にも直接歩いて移動できたが、駅間を
-  // 徒歩で移動できてしまうと(徒歩半径8km・低ゲージ時でも5km)非現実的な
-  // 距離を歩くケースが目立つとの指摘を受けた。駅から駅への移動は必ず鉄道
-  // (connections由来の`mode: 'rail'`等)を使うようにし、徒歩は観光名所
-  // (`node._type === 'place'`)への寄り道専用にする。現在地が観光名所の場合の
-  // 「最寄り駅への帰路」だけは、駅ネットワークへ戻るために必要な例外として
-  // 別途下で保証している。
-  // 2026-08-02、ユーザー指示: 観光地が多すぎるため、公式ホームページの表示
-  // 機能の確認も兼ねて、いったん公式URLを持つ観光地(現状約1,433件)だけを
-  // 候補に表示する。
+  // --- 徒歩候補(観光名所への寄り道 + 徒歩圏内の駅への直接移動) ---
+  // 2026-07-31、ユーザー指示により一度「駅から駅への移動は必ず鉄道」に限定した
+  // (徒歩半径8km・低ゲージ時でも5kmという上限はあるが、非現実的との指摘)。
+  // 2026-08-02、ユーザー指示により再度解禁: 体力に余裕があれば、徒歩圏内
+  // (既存のwalkRadius=5〜8km、駅間を延々歩けるわけではなく従来の観光地
+  // 寄り道と同じ距離上限)であれば駅にも直接歩いて移動できるようにした
+  // (資金が尽きた際、乗車券を買わずに次の駅まで歩いて凌ぐ手段として)。
+  // 観光名所は引き続き公式URLを持つもの(現状約1,433件)だけに絞り込む。
   const nearby = getNearbyNodes(currentNode.lat, currentNode.lng, walkRadius, spatialIndex, currentNode.id)
-    .filter(({ node }) => node._type === 'place' && !!node.officialUrl);
+    .filter(({ node }) => (node._type === 'place' && !!node.officialUrl) || node._type === 'transport');
   for (const { node, distanceKm } of nearby) {
     // progressScoreにはctx.reachability(グラフ最短距離)を渡す(以前は未指定で
     // 常に直線距離フォールバックになっていた。Phase2の趣旨に沿って修正)。
@@ -511,6 +508,103 @@ function generateCandidates(ctx) {
     return results.slice(0, FAR_CANDIDATE_MAX_RESULTS);
   }
   candidates.push(...buildFarCandidates());
+
+  // --- お金が尽きたときの救済: 一番近い「稼げる場所」までのヒッチハイク ---
+  // (2026-08-02、ユーザー指示)。通常のヒッチハイクは隣接駅への直接接続にしか
+  // 出ず、しかも目的地方向にフィルタされるため、目的地が近いと稼げる観光地
+  // (公式URLを持つ地点)へ向かう手段が無くなってしまうことがあった。
+  // buildFarCandidatesと同様に複数区間を辿るが、運賃ではなく各区間の
+  // ヒッチハイク成功率を掛け合わせて評価し(区間が多いほど成功率は下がる)、
+  // 目的地方向へのフィルタも受けない(候補配列に直接pushするため)。
+  // 区間数が増えるほど成功率(各区間の成功率の掛け算)が急激に下がり、
+  // 「救済」として機能しなくなるため、遠方通し候補(6区間)より短く抑える。
+  const MONEY_RESCUE_MAX_HOPS = 6;
+  function buildMoneyRescueHitchhikeCandidate() {
+    if (currentNode._type !== 'transport') return null;
+    if (ctx.hitchhikeLocked) return null;
+
+    const moneyStationIds = new Set();
+    for (const place of placesById.values()) {
+      if (place.officialUrl && place.nearestStationId != null) moneyStationIds.add(place.nearestStationId);
+    }
+    if (moneyStationIds.size === 0) return null;
+
+    const startId = currentNode.id;
+    const best = new Map([[startId, { rate: 1, distanceKm: 0, hops: 0 }]]);
+    const visited = new Set();
+    const frontier = new Map([[startId, 0]]); // 探索優先度: hops(浅い方を優先)
+    while (frontier.size > 0 && visited.size < FAR_CANDIDATE_MAX_VISITED) {
+      let curId = null;
+      let curHops = Infinity;
+      for (const [id, h] of frontier) { if (h < curHops) { curHops = h; curId = id; } }
+      frontier.delete(curId);
+      if (visited.has(curId)) continue;
+      visited.add(curId);
+      const curBest = best.get(curId);
+      if (curBest.hops >= MONEY_RESCUE_MAX_HOPS) continue;
+      const node = stationsById.get(curId);
+      if (!node) continue;
+      for (const conn of node.connections || []) {
+        if (conn.mode === 'walk') continue;
+        const flightOnly = conn.requiresTransport.length === 1 && conn.requiresTransport[0] === 'flight';
+        if (flightOnly) continue; // ヒッチハイクは飛行機区間には使えない(§7.1.1と同様)
+        const isFerry = conn.requiresTransport.includes('ferry');
+        const baseRate = isFerry ? HITCHHIKE_BASE_RATE_FERRY : HITCHHIKE_BASE_RATE_LAND;
+        const luckBonus = ctx.hitchhikeLuckBonus || 0;
+        const hopRate = Math.min(0.95, Math.max(0.05, baseRate + luckBonus - (lowStat ? HITCHHIKE_LOW_STAT_PENALTY : 0)));
+        const neighbor = stationsById.get(conn.toId);
+        if (!neighbor) continue;
+        const legDist = haversineKm(node.lat, node.lng, neighbor.lat, neighbor.lng);
+        const nextHops = curBest.hops + 1;
+        const nextRate = curBest.rate * hopRate;
+        const existing = best.get(conn.toId);
+        if (!existing || nextHops < existing.hops) {
+          best.set(conn.toId, { rate: nextRate, distanceKm: curBest.distanceKm + legDist, hops: nextHops });
+          if (!visited.has(conn.toId)) frontier.set(conn.toId, nextHops);
+        }
+      }
+    }
+    best.delete(startId);
+
+    // 成功率(rate)を最優先で選ぶ(ホップ数が少ないほど自然と高くなるが、
+    // 「救済」としては到達確率の高さの方が重要なため)。
+    let target = null;
+    for (const [id, info] of best) {
+      if (info.hops <= 1) continue; // 直接接続は通常のヒッチハイク候補で既にカバーされている
+      if (!moneyStationIds.has(id)) continue;
+      if (!target || info.rate > target.info.rate ||
+          (info.rate === target.info.rate && info.hops < target.info.hops)) {
+        target = { id, info };
+      }
+    }
+    if (!target) return null;
+
+    const node = stationsById.get(target.id);
+    const progress = progressScore(currentNode, node, destinationNode, ctx.reachability);
+    const discovery = effectiveDiscovery(node);
+    return {
+      key: `hitchhike_money_${startId}_${target.id}`,
+      targetId: target.id,
+      targetType: 'transport',
+      targetName: node.name,
+      mode: 'hitchhike',
+      cost: 0,
+      distanceKm: target.info.distanceKm,
+      isBudget: false,
+      successRate: target.info.rate,
+      discoveryScore: node.discoveryScore || 0,
+      isNew: !discoveredSet.has(target.id),
+      category: '移動',
+      farHops: target.info.hops,
+      moneyRescue: true,
+      score: candidateScore({
+        progress, discoveryScore: discovery,
+        transportScore: transportScoreOf({ _type: 'transport', connections: node.connections }, stationsById),
+      }) - HITCHHIKE_SCORE_PENALTY,
+    };
+  }
+  const moneyRescueCandidate = buildMoneyRescueHitchhikeCandidate();
+  if (moneyRescueCandidate) candidates.push(moneyRescueCandidate);
 
   // 通常は目的地方向のみフィルタする。目的地から遠ざかる接続(フィルタ後
   // 0件になった場合の最終フォールバック)だけ、詰み防止のためフィルタなしで

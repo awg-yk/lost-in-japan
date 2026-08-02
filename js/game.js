@@ -53,17 +53,23 @@ const OFFICIAL_SITE_VIEW_REWARD_TOTAL_CAP = 10000;
 // 2026-08-02、ユーザー指示により「アルバイトする」を廃止した(旧WORK_WAGE等の
 // 定数・canWork()/work()等のメソッドは削除済み)。代わりに、観光名所
 // (地点データ)へ到着すると自動的にボーナスがもらえる(PLACE_ARRIVAL_BONUS)。
-// これはonArrive()内の発見報酬(旧: discoveryScoreベースの可変額)を、
-// 観光名所に限り固定額へ置き換える形で実装している(駅・空港・港の発見報酬は
-// 従来どおりnode.rewardを使う)。
 const PLACE_ARRIVAL_BONUS = 1000;
-// 2026-07-31: 「新規発見した地点ごとにdiscoveryScoreベースの報酬(50〜200円
-// 程度)を毎回無条件に受け取れる」onArrive()の仕様が、観光地が全国2万件超に
-// なった今、これ単体で数十万円規模の青天井収入源になっていた(実測: 1プレイで
-// 50万円超)。探索へのご褒美という趣旨自体は残しつつ、ゲーム全体で受け取れる
-// 発見報酬の合計に上限を設ける(上限到達後もdiscoveredIds自体には引き続き
-// 加算され、既訪問扱い・既訪問地点の除外ロジックには影響しない。お金だけが
-// それ以上増えなくなる)。
+// 2026-08-02、ユーザー報告により修正: PLACE_ARRIVAL_BONUSを導入した当初、
+// 駅・観光名所どちらの発見報酬も同じdiscoveryRewardEarned/DISCOVERY_REWARD_
+// TOTAL_CAP(8000円、旧: 駅・観光名所合わせて50〜200円程度の可変報酬を
+// 前提に設定した値)を共有していたため、固定1000円の観光名所ボーナスだと
+// わずか8回訪問しただけで上限に達し、「途中から観光地に行っても千円が
+// もらえない」状態になっていた。観光名所のボーナスは駅の発見報酬とは
+// 別の専用の合計上限(placeArrivalBonusEarned/PLACE_ARRIVAL_BONUS_TOTAL_CAP)
+// で管理し、互いに影響しないようにする。
+const PLACE_ARRIVAL_BONUS_TOTAL_CAP = 15000;
+// 2026-07-31: 「新規発見した地点(駅・空港・港)ごとにdiscoveryScoreベースの
+// 報酬(50〜200円程度)を毎回無条件に受け取れる」onArrive()の仕様が、全国の
+// 駅データが1万件超に拡張された結果、これ単体で青天井収入源になり得た。
+// 探索へのご褒美という趣旨自体は残しつつ、ゲーム全体で受け取れる発見報酬の
+// 合計に上限を設ける(上限到達後もdiscoveredIds自体には引き続き加算され、
+// 既訪問扱い・既訪問地点の除外ロジックには影響しない。お金だけがそれ以上
+// 増えなくなる)。
 const DISCOVERY_REWARD_TOTAL_CAP = 8000;
 
 const RANDOM_EVENT_CHANCE = 0.25;
@@ -149,6 +155,7 @@ const Game = {
       playTimeSec: 0,
       totalDistanceKm: 0,
       discoveryRewardEarned: 0,
+      placeArrivalBonusEarned: 0,
       randomEventMoneyEarned: 0,
       officialSiteViewedIds: [],
       officialSiteRewardEarned: 0,
@@ -165,14 +172,22 @@ const Game = {
     if (!this.state.visitedIds.includes(nodeId)) this.state.visitedIds.push(nodeId);
     if (!this.state.discoveredIds.includes(nodeId)) {
       this.state.discoveredIds.push(nodeId);
-      const node = nodeType === 'place' ? this.data.placesById.get(nodeId) : this.data.stationsById.get(nodeId);
-      // 観光名所は固定のPLACE_ARRIVAL_BONUS(2026-08-02、アルバイト廃止に伴う
-      // 置き換え)、駅・空港・港は従来どおりnode.rewardを使う。
-      const reward = nodeType === 'place' ? PLACE_ARRIVAL_BONUS : ((node && node.reward) || 0);
-      const earned = this.state.discoveryRewardEarned || 0;
-      const grantable = Math.max(0, Math.min(reward, DISCOVERY_REWARD_TOTAL_CAP - earned));
-      this.state.money += grantable;
-      this.state.discoveryRewardEarned = earned + grantable;
+      if (nodeType === 'place') {
+        // 観光名所は固定のPLACE_ARRIVAL_BONUS(2026-08-02、アルバイト廃止に伴う
+        // 置き換え)。駅の発見報酬(DISCOVERY_REWARD_TOTAL_CAP)とは別の専用の
+        // 合計上限で管理する(理由は同定数のコメント参照)。
+        const earned = this.state.placeArrivalBonusEarned || 0;
+        const grantable = Math.max(0, Math.min(PLACE_ARRIVAL_BONUS, PLACE_ARRIVAL_BONUS_TOTAL_CAP - earned));
+        this.state.money += grantable;
+        this.state.placeArrivalBonusEarned = earned + grantable;
+      } else {
+        const node = this.data.stationsById.get(nodeId);
+        const reward = (node && node.reward) || 0;
+        const earned = this.state.discoveryRewardEarned || 0;
+        const grantable = Math.max(0, Math.min(reward, DISCOVERY_REWARD_TOTAL_CAP - earned));
+        this.state.money += grantable;
+        this.state.discoveryRewardEarned = earned + grantable;
+      }
     }
   },
 
