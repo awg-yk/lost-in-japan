@@ -176,15 +176,21 @@ test('④: a failed hitchhike halves (and floors) hunger and stamina', () => {
   assert.equal(Game.state.stamina, Math.floor(7 / 2), 'stamina should be halved and floored');
 });
 
-test('⑤: game over triggers exactly when money<=0 and hunger<=0 and stamina<=0', () => {
+test('⑤: game over triggers exactly when money is below the cheapest recovery and hunger<=0 and stamina<=0', () => {
+  // 2026-08-03修正: 従来は`money<=0`ちょうどを境界にしていたが、それだと
+  // 「所持金はあるが最安の回復手段(休憩¥150)にも満たない半端な金額」で
+  // 頭打ちになった場合に永久に詰む実バグがあった(PLACE_ARRIVAL_BONUS撤廃+
+  // 空腹/体力減衰率強化の組み合わせで、回帰テストのbotシミュレーションが
+  // 実際に検出)。境界を「回復に使えるだけのお金が無い」(money < REST_COST)
+  // に修正したので、このテストの境界値もそれに合わせて更新した。
   const sandbox = freshGame();
   const { Game } = sandbox;
 
-  Game.state.money = 100; Game.state.hunger = 0; Game.state.stamina = 0;
-  assert.equal(Game.isIncapacitated(), false, 'still has money, so not incapacitated yet');
+  Game.state.money = sandbox.REST_COST; Game.state.hunger = 0; Game.state.stamina = 0;
+  assert.equal(Game.isIncapacitated(), false, 'money covers the cheapest recovery, so not incapacitated yet');
 
-  Game.state.money = 0;
-  assert.equal(Game.isIncapacitated(), true, 'no money and both gauges at 0 should be incapacitated');
+  Game.state.money = sandbox.REST_COST - 1;
+  assert.equal(Game.isIncapacitated(), true, 'money below the cheapest recovery and both gauges at 0 should be incapacitated');
 
   Game.state.hunger = 5;
   assert.equal(Game.isIncapacitated(), false, 'hunger above 0 means not (yet) incapacitated');

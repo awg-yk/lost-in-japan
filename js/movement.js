@@ -39,6 +39,25 @@ function railFare(distanceKm) {
   return Math.round(raw / 10) * 10;
 }
 
+// タクシー運賃(2026-08-03、ユーザー指示で新設)。徒歩ではどうしても
+// 届かない観光地への代替移動手段として、初乗り500円+距離比例(円/km)、
+// 10円単位で計算する。鉄道と違って乗り換えの概念が無いため直線距離
+// そのものを使う(観光地は駅と違ってグラフ接続を持たないため)。
+const TAXI_BASE_FARE = 500;
+const TAXI_FARE_PER_KM = 30;
+
+function taxiFare(distanceKm) {
+  const raw = TAXI_BASE_FARE + distanceKm * TAXI_FARE_PER_KM;
+  return Math.round(raw / 10) * 10;
+}
+
+// 所持金からタクシーで届く最大距離を逆算する(地図上に「移動可能な円」を
+// 描くために使う。taxiFareの逆関数)。
+function taxiMaxDistanceForMoney(money) {
+  if (money < TAXI_BASE_FARE) return 0;
+  return (money - TAXI_BASE_FARE) / TAXI_FARE_PER_KM;
+}
+
 // 2026-07-31: ユーザー指示により、候補地をカテゴリー別(歴史・自然・温泉・
 // 道の駅・その他の観光目的と、ゴールに近づく駅・港等の「移動」)に整理して
 // 表示できるようにする。observedデータのtype値からカテゴリーを機械的に
@@ -878,6 +897,8 @@ window.Movement = {
   CATEGORY_QUOTA,
   categoryOf,
   railFare,
+  taxiFare,
+  taxiMaxDistanceForMoney,
   generateAllReachableStations,
   MAJOR_STATION_MIN_CONNECTIONS,
 };

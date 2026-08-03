@@ -17,8 +17,13 @@ const DIFFICULTY_PRESETS = {
 
 // 空腹は移動時間の目安として全ての移動手段で減少する。
 // 体力は「歩いた」ことによる身体的消耗のみで減少する(電車や飛行機に乗っている間は消耗しない)。
-const HUNGER_DECAY_PER_KM = 0.06;
-const STAMINA_DECAY_PER_KM_WALK = 1.1;
+// 2026-08-03、ユーザー指示により係数を改訂: 徒歩換算で20km歩くと空腹ゲージが
+// (満腹100%から)ちょうど0になるようHUNGER_DECAY_PER_KM=100/20=5、40km歩くと
+// 体力ゲージが0になるようSTAMINA_DECAY_PER_KM_WALK=100/40=2.5とした
+// (下記HUNGER/STAMINA_DECAY_PER_MOVE_FLATの分だけ、実際にはこれよりわずかに
+// 早く0に達する)。
+const HUNGER_DECAY_PER_KM = 5;
+const STAMINA_DECAY_PER_KM_WALK = 2.5;
 // 2026-07-31: 全国駅・観光地データの拡張により、短距離の徒歩・乗り換えだけを
 // 繰り返す「足踏み」でも距離ベースの消耗がほとんど発生せず、資金さえあれば
 // 実質無期限に旅を続けられてしまうことが分かった(ユーザー指摘: 実際のプレイ
@@ -50,13 +55,11 @@ const ONSEN_COST = 500;
 const OFFICIAL_SITE_VIEW_REWARD = 1000;
 const OFFICIAL_SITE_VIEW_REWARD_TOTAL_CAP = 10000;
 
-// 2026-08-02、ユーザー指示により「アルバイトする」を廃止した(旧WORK_WAGE等の
-// 定数・canWork()/work()等のメソッドは削除済み)。代わりに、観光名所
-// (地点データ)へ到着すると自動的にボーナスがもらえる(PLACE_ARRIVAL_BONUS)。
-// 2026-08-02、ユーザー指示により合計上限を撤廃した(「稼ごうと思ったら
-// いくらでも稼げるように」)。新規の観光名所を訪れ続ける限り無制限にもらえる
-// (既に訪れた地点の再訪では発生しない。discoveredIdsによる重複排除は従来どおり)。
-const PLACE_ARRIVAL_BONUS = 1000;
+// 2026-08-03、ユーザー指示によりPLACE_ARRIVAL_BONUS(観光名所到着時の
+// 固定ボーナス)を廃止した。公式ホームページを見る(OFFICIAL_SITE_VIEW_REWARD)
+// で既に報酬をもらえるため、到着だけでさらに1000円もらえるのは二重取りだった
+// (削除済み定数・ロジックの経緯: 2026-08-02にアルバイト廃止の代替として導入、
+// 同日中に合計上限を撤廃していた)。
 // 2026-07-31: 「新規発見した地点(駅・空港・港)ごとにdiscoveryScoreベースの
 // 報酬(50〜200円程度)を毎回無条件に受け取れる」onArrive()の仕様が、全国の
 // 駅データが1万件超に拡張された結果、これ単体で青天井収入源になり得た。
@@ -166,9 +169,8 @@ const Game = {
     if (!this.state.discoveredIds.includes(nodeId)) {
       this.state.discoveredIds.push(nodeId);
       if (nodeType === 'place') {
-        // 観光名所は固定のPLACE_ARRIVAL_BONUS(2026-08-02、アルバイト廃止に伴う
-        // 置き換え)。上限は無し(ユーザー指示)。
-        this.state.money += PLACE_ARRIVAL_BONUS;
+        // 2026-08-03、ユーザー指示によりここでの固定ボーナス付与は廃止した
+        // (公式ホームページ閲覧報酬と二重取りになっていたため)。
       } else {
         const node = this.data.stationsById.get(nodeId);
         const reward = (node && node.reward) || 0;
@@ -335,7 +337,7 @@ const Game = {
     const radiusKm = lowStat ? Movement.WALK_RADIUS_KM_LOW_STAT : Movement.WALK_RADIUS_KM_DEFAULT;
     const distanceKm = Movement.haversineKm(cur.lat, cur.lng, place.lat, place.lng);
     if (distanceKm > radiusKm) {
-      return { ok: false, blocked: true, message: '最寄り駅まで移動してください。' };
+      return { ok: false, blocked: true, message: '徒歩では届きません。最寄り駅まで移動するか、タクシーを使ってください。' };
     }
     return this.chooseCandidate({
       key: `walk_place_${place.id}`,
@@ -344,6 +346,36 @@ const Game = {
       targetName: place.name,
       mode: 'walk',
       cost: 0,
+      distanceKm,
+    });
+  },
+
+  // 2026-08-03、ユーザー指示で新設: 徒歩ではどうしても届かない観光地への
+  // 代替移動手段としてタクシーを追加した。所持金に応じて届く範囲
+  // (Movement.taxiMaxDistanceForMoney)を地図上に円で示し、その中の観光地は
+  // 距離に応じた運賃(Movement.taxiFare)を払えばどこでも移動できる。
+  // 体力は消費しない(mode!=='walk'のためchooseCandidate側の消耗計算で
+  // 自動的に対象外になる)。
+  getTaxiRadiusKm() {
+    return Movement.taxiMaxDistanceForMoney(this.state.money);
+  },
+
+  taxiToPlace(placeId) {
+    const place = this.data.placesById.get(placeId);
+    if (!place) return { ok: false, message: '地点が見つかりません。' };
+    const cur = this.currentNode();
+    const distanceKm = Movement.haversineKm(cur.lat, cur.lng, place.lat, place.lng);
+    const fare = Movement.taxiFare(distanceKm);
+    if (this.state.money < fare) {
+      return { ok: false, blocked: true, message: `タクシー代(¥${fare.toLocaleString()})が足りません。` };
+    }
+    return this.chooseCandidate({
+      key: `taxi_place_${place.id}`,
+      targetId: place.id,
+      targetType: 'place',
+      targetName: place.name,
+      mode: 'taxi',
+      cost: fare,
       distanceKm,
     });
   },
@@ -536,17 +568,28 @@ const Game = {
   },
 
   // 2026-08-02、ユーザー指示により「アルバイトする」(canWork/workPreview/work)
-  // を廃止した。観光名所到着時のPLACE_ARRIVAL_BONUS自動付与(onArrive参照)に
-  // 置き換えている。
+  // を廃止した(2026-08-03、その代替だった到着時固定ボーナスも二重取りの
+  // ため撤廃済み。現在の観光名所での主な収入源は公式ホームページ閲覧報酬)。
 
   // 行動不能判定(2026-07-30、ユーザー指示による新規追加): 所持金が無く(0以下)、
   // かつ空腹・体力の両方が0の場合、これ以上取れる行動が実質無い
   // (食事・温泉はお金が要り、アルバイトは空腹/体力0で不可)とみなしてゲームオーバーにする。
   // ヒッチハイクは所持金が無いときの最終手段として使えるが、それでもこの状態を
   // 「詰み」ではなく「現実的な失敗」として扱う、というユーザーの意図を反映している。
+  // 2026-08-03判明・修正: 従来は`money<=0`を条件にしていたが、これは
+  // 「所持金が少しでも残っていればいずれ回復できる」という前提に基づいていた。
+  // ところが2026-08-03のPLACE_ARRIVAL_BONUS撤廃(①)により、収入源が
+  // discoveryRewardEarned(上限8,000円)・randomEventMoneyEarned(上限5,000円)の
+  // 2つとも上限額に達した後は一切収入が増えなくなった。そこへ同日の空腹/体力
+  // 減衰率強化(③)が重なった結果、所持金が最安の回復手段(休憩¥150)未満の
+  // 半端な金額(例: ¥20)で頭打ちになり、食事も休憩もできないのに
+  // `money<=0`は成立しないため、空腹・体力ともに0のまま永久に彷徨い続ける
+  // (回帰テストのbotシミュレーションで実際に検出。30000手でも決着せず)
+  // 詰みが発生するようになった。「回復に使えるだけのお金が無い」を正しく
+  // 表す`money < REST_COST`(最も安い回復手段の額)に修正した。
   isIncapacitated() {
     const s = this.state;
-    return s.money <= 0 && s.hunger <= 0 && s.stamina <= 0;
+    return s.hunger <= 0 && s.stamina <= 0 && s.money < REST_COST;
   },
 
   checkGameOver() {

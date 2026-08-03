@@ -1681,3 +1681,59 @@ movement.js側のgenerateCandidates()には「徒歩圏内の駅」+「孤立防
 差し替えてクリックすると実際に`arrived:true`まで到達。②観光地に徒歩移動後
 `getMapStationCandidates()`が11件返り、うち1件クリックで実際に駅へ戻れる
 ことを確認。fixes/fixes2(9件)・regression(5件)全PASS。
+
+## 20. 追記(2026-08-03): 到着ボーナス撤廃・タクシー追加・減衰率強化、および発見した本物の詰みバグの修正
+
+ユーザーから3点の指示。
+
+1. **観光名所到着時の固定ボーナス(PLACE_ARRIVAL_BONUS、1000円)を撤廃**。
+   公式ホームページ閲覧報酬(OFFICIAL_SITE_VIEW_REWARD)と二重取りだった
+   との指摘。`onArrive()`のplace分岐から`this.state.money += PLACE_ARRIVAL_BONUS`を
+   削除し、定数自体も削除した。
+2. **タクシーを追加**。徒歩では届かない観光地への代替移動手段。
+   `Movement.taxiFare(distanceKm)`(初乗り500円+30円/km、10円単位に丸め)、
+   `Movement.taxiMaxDistanceForMoney(money)`(所持金から届く最大距離を逆算)
+   を新設。`Game.getTaxiRadiusKm()`/`Game.taxiToPlace(placeId)`を追加。
+   UIは自分(現在地🚶)のマーカーをクリックするとタクシーで届く範囲を
+   地図上に円で表示/非表示トグルする(`MapView.showTaxiRadius`/
+   `clearTaxiRadius`、`setCurrent`にonClickパラメータを追加)。徒歩圏外・
+   タクシー到達圏内の観光地マーカーは運賃付きでクリック移動でき、
+   タクシー代も届かない場合のみ「徒歩では届きません。最寄り駅まで移動する
+   か、タクシーを使ってください。」を表示する。タクシーはmode!=='walk'
+   なので体力は消費しない(chooseCandidate側の既存ロジックで自動的に対象外)。
+3. **空腹/体力の距離あたり減衰率を改訂**。徒歩40kmで体力ゲージが、20kmで
+   空腹ゲージがちょうど0になるよう、`HUNGER_DECAY_PER_KM`を0.06→5
+   (=100/20)、`STAMINA_DECAY_PER_KM_WALK`を1.1→2.5(=100/40)に変更した。
+
+**③の変更を反映してregression.test.jsを流したところ、実際に本物の詰み
+バグを発見した**(botのシミュレーションで`greedy/easy/seed=10`が30000手
+経っても決着しなかった)。原因を`isIncapacitated()`(`money<=0 && hunger<=0
+&& stamina<=0`でgame over判定)まで追ったところ、①(到着ボーナス撤廃)で
+収入源が`discoveryRewardEarned`(上限8,000円)・`randomEventMoneyEarned`
+(上限5,000円)の2つだけになり、両方の上限に達すると以後一切収入が
+増えなくなることが判明。そこへ③の減衰率強化が重なった結果、所持金が
+最安の回復手段(休憩¥150)未満の半端な金額(実測¥20)で頭打ちになり、
+食事も休憩もできないのに`money<=0`は成立しないため、空腹・体力ともに
+0のまま(botは徒歩なら無料で動けるので)永久に彷徨い続ける状態になって
+いた(実際のプレイヤーが公式サイト閲覧報酬を全く使わなかった場合も
+理論上同じ状況になり得る)。
+
+`isIncapacitated()`の条件を`money <= 0`から`money < REST_COST`(最も
+安い回復手段の額)に修正した。「所持金が少しでも残っていればいずれ
+回復できる」という従来の前提が、最安の回復手段の額を下回っている
+場合には成り立たないことを反映した、意味的に正しい修正。これに伴い
+`tests/fixes2.test.js`の境界値テストも`money<=0`前提から
+`money<REST_COST`前提に更新した。
+
+修正後、上記の2シード(`greedy/easy/10`・`discovery/normal/6`)は
+106手・76手で正しくgame overするようになった(以前は30000手でも未決着)。
+regression.test.js全体の実行時間も大幅短縮(約530秒→約53秒。所持金が
+尽きたゲームが正しく終了するようになったため、既存のKNOWN_SLOW_COMBOS
+に該当していた低速ケースの多くも副次的に解消したとみられる)。
+fixes/fixes2(9件)・regression(5件)全PASS。
+
+**次回セッションへの申し送り**: `isIncapacitated()`の修正は今回発見した
+バグの対症療法ではなく、ゲームオーバー条件そのものの意味的な誤りを
+直したものなので、今後同種の経済バランス変更(収入源の追加・削除、
+回復コストの変更等)を行う際は、この条件式(`money < REST_COST`)が
+引き続き正しい境界かどうかを都度確認すること。

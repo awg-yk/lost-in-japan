@@ -106,6 +106,9 @@ html, body{
 .candidate-map-marker{ cursor:pointer; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.6)); transition: transform 0.12s ease; }
 .candidate-map-marker:hover{ transform: scale(1.25); }
 .destination-flag-marker{ cursor:pointer; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.6)); }
+/* 自分(現在地)のマーカー。クリックするとタクシーで移動可能な範囲の円を
+   表示/非表示できる(2026-08-03、ユーザー指示)。 */
+.self-marker{ cursor:pointer; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.6)); }
 .candidate-map-marker--new::after{
   content:'✦'; position:absolute; top:-4px; right:-4px; font-size:11px; color: var(--accent-green);
 }

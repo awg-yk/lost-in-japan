@@ -1,7 +1,7 @@
 // main.js — 初期化、ゲームループの起点
 
-const MODE_ICON = { walk: '🚶', rail: '🚃', flight: '✈️', ferry: '⛴️', hitchhike: '🚗' };
-const MODE_LABEL = { walk: '徒歩', rail: '鉄道', flight: '飛行機', ferry: 'フェリー', hitchhike: 'ヒッチハイク' };
+const MODE_ICON = { walk: '🚶', rail: '🚃', flight: '✈️', ferry: '⛴️', hitchhike: '🚗', taxi: '🚕' };
+const MODE_LABEL = { walk: '徒歩', rail: '鉄道', flight: '飛行機', ferry: 'フェリー', hitchhike: 'ヒッチハイク', taxi: 'タクシー' };
 
 function fmtKm(km) { return km < 10 ? `${km.toFixed(2)} km` : `${km.toFixed(1)} km`; }
 function fmtMoney(n) { return `¥${Math.floor(n).toLocaleString()}`; }
@@ -186,11 +186,12 @@ function showOfficialSitePinIfAny(node) {
 
 // 徒歩圏外の観光地用のツールチップ(「最寄り駅まで移動してください。」)。
 function blockedPlaceTooltipHtml(node, distanceKm) {
+  const taxiCost = Movement.taxiFare(distanceKm);
   return `
     <div class="map-candidate-tooltip map-candidate-tooltip--blocked">
       <div class="map-candidate-tooltip-name">📍 ${node.name}</div>
       <div class="map-candidate-tooltip-meta">${fmtKm(distanceKm)} ・ 徒歩圏外</div>
-      <div class="map-candidate-tooltip-preview">最寄り駅まで移動してください。</div>
+      <div class="map-candidate-tooltip-preview">タクシーなら¥${taxiCost.toLocaleString()}(所持金が足りません)</div>
     </div>
   `;
 }
@@ -238,35 +239,77 @@ function buildMapItems() {
     return { currentNode, items: stationItems, placesHiddenByZoom, stationsMajorOnly };
   }
 
+  // 2026-08-03、ユーザー指示で追加: 徒歩では届かない観光地でも、タクシー
+  // (初乗り500円+距離比例、Movement.taxiFare)の運賃を払えるなら移動できる
+  // ようにする。届く範囲は所持金から逆算(Game.getTaxiRadiusKm)し、自分自身の
+  // マーカーをクリックすると地図上に円で表示する(setupSelfMarkerClick参照)。
+  const taxiRadiusKm = Game.getTaxiRadiusKm();
   const placeItems = Game.getAllPlacesForMap()
     .filter(info => bounds.contains([info.place.lat, info.place.lng]))
-    // 徒歩で実際に行ける地点を優先して残し、間引かれるのは徒歩圏外(見た目の
-    // 参考程度)の地点からにする。同条件内では近い順。
-    .sort((a, b) => (a.walkable === b.walkable ? a.distanceKm - b.distanceKm : (a.walkable ? -1 : 1)))
+    // 徒歩・タクシーで実際に行ける地点を優先して残し、間引かれるのは
+    // どちらでも行けない(見た目の参考程度)地点からにする。同条件内では近い順。
+    .sort((a, b) => {
+      const aReachable = a.walkable || a.distanceKm <= taxiRadiusKm;
+      const bReachable = b.walkable || b.distanceKm <= taxiRadiusKm;
+      return aReachable === bReachable ? a.distanceKm - b.distanceKm : (aReachable ? -1 : 1);
+    })
     .slice(0, PLACE_MARKERS_MAX_COUNT)
     .map(info => {
       const node = info.place;
       const emoji = (window.TYPE_ICONS && window.TYPE_ICONS[node.type]) || '📍';
-      const candidate = {
-        targetId: node.id, targetType: 'place', targetName: node.name,
-        mode: 'walk', cost: 0, distanceKm: info.distanceKm, isNew: info.isNew,
+      const taxiReachable = !info.walkable && info.distanceKm <= taxiRadiusKm;
+      let tooltipHtml;
+      if (info.walkable) {
+        tooltipHtml = candidateTooltipHtml({
+          targetId: node.id, targetType: 'place', targetName: node.name,
+          mode: 'walk', cost: 0, distanceKm: info.distanceKm, isNew: info.isNew,
+        });
+      } else if (taxiReachable) {
+        tooltipHtml = candidateTooltipHtml({
+          targetId: node.id, targetType: 'place', targetName: node.name,
+          mode: 'taxi', cost: Movement.taxiFare(info.distanceKm), distanceKm: info.distanceKm, isNew: info.isNew,
+        });
+      } else {
+        tooltipHtml = blockedPlaceTooltipHtml(node, info.distanceKm);
+      }
+      return {
+        kind: 'place', place: node, node, emoji, tooltipHtml, isNew: info.isNew,
+        walkable: info.walkable, taxiReachable, blocked: !info.walkable && !taxiReachable,
       };
-      const tooltipHtml = info.walkable
-        ? candidateTooltipHtml(candidate)
-        : blockedPlaceTooltipHtml(node, info.distanceKm);
-      return { kind: 'place', place: node, node, emoji, tooltipHtml, isNew: info.isNew, walkable: info.walkable, blocked: !info.walkable };
     });
 
   return { currentNode, items: [...stationItems, ...placeItems], placesHiddenByZoom, stationsMajorOnly };
 }
 
-// 地図マーカーのクリックを、駅(候補選択)と観光地(徒歩)とで振り分ける。
+// 地図マーカーのクリックを、駅(候補選択)と観光地(徒歩/タクシー)とで振り分ける。
 function onMapMarkerClick(item) {
   if (item.kind === 'station') {
     onChooseCandidate(item.candidate);
     return;
   }
-  onWalkToPlace(item.place, item.isNew);
+  if (item.walkable) {
+    onWalkToPlace(item.place, item.isNew);
+  } else if (item.taxiReachable) {
+    onTaxiToPlace(item.place, item.isNew);
+  } else {
+    onWalkToPlace(item.place, item.isNew); // 徒歩圏外・タクシー代も足りない場合の案内メッセージ
+  }
+}
+
+// 現在地(自分)のマーカーをクリックした際の処理: タクシーで移動可能な範囲を
+// 円で表示/非表示をトグルする(2026-08-03、ユーザー指示)。
+let taxiCircleVisible = false;
+function onSelfMarkerClick() {
+  taxiCircleVisible = !taxiCircleVisible;
+  updateTaxiCircle();
+}
+function updateTaxiCircle() {
+  const cur = Game.currentNode();
+  if (!cur || !taxiCircleVisible) {
+    MapView.clearTaxiRadius();
+    return;
+  }
+  MapView.showTaxiRadius(cur, Game.getTaxiRadiusKm());
 }
 
 // 駅マーカー(鉄道・飛行機・フェリー・ヒッチハイク候補)をクリックした際の処理。
@@ -289,7 +332,7 @@ function onChooseCandidate(candidate) {
 
   const node = candidate.targetType === 'place' ? Game.data.placesById.get(candidate.targetId) : Game.data.stationsById.get(candidate.targetId);
   MapView.markVisited(node, candidate.isNew);
-  MapView.setCurrent(node, true);
+  MapView.setCurrent(node, true, onSelfMarkerClick);
   showOfficialSitePinIfAny(node);
 
   if (result.arrived) {
@@ -308,7 +351,22 @@ function onWalkToPlace(place, wasNew) {
   if (result.gameOver) { showGameOver(); return; }
   if (!result.ok) { renderCandidates(); return; }
   MapView.markVisited(place, wasNew);
-  MapView.setCurrent(place, true);
+  MapView.setCurrent(place, true, onSelfMarkerClick);
+  showOfficialSitePinIfAny(place);
+  if (result.arrived) { showResult(); return; }
+  renderCandidates();
+}
+
+function onTaxiToPlace(place, wasNew) {
+  MapView.clearCandidatePreview();
+  const result = Game.taxiToPlace(place.id);
+  toast(result.message);
+  if (result.blocked) return; // タクシー代が足りない。状態は変わっていないので地図はそのまま。
+  renderHud();
+  if (result.gameOver) { showGameOver(); return; }
+  if (!result.ok) { renderCandidates(); return; }
+  MapView.markVisited(place, wasNew);
+  MapView.setCurrent(place, true, onSelfMarkerClick);
   showOfficialSitePinIfAny(place);
   if (result.arrived) { showResult(); return; }
   renderCandidates();
@@ -355,6 +413,7 @@ function renderCandidates() {
   const zoomHint = placesHiddenByZoom ? '観光地表示にはもう少しズームインしてください。' : `観光地${placeCount}件`;
   list.innerHTML = `<div class="map-move-hint">🗺️ マーカーにカーソルを合わせると詳細、クリックで移動します。（表示中: ${stationLabel}・${zoomHint}）</div>`;
   MapView.renderCandidateMarkers(items, currentNode, onMapMarkerClick);
+  updateTaxiCircle(); // 表示中なら所持金/現在地の変化に合わせて円を更新する
 }
 
 // 地図をパン/ズームするたびに、表示範囲内の駅・観光地マーカーを描画し直す
@@ -372,6 +431,7 @@ function showGameOver() {
   document.getElementById('gameover-visited').textContent = s.visitedIds.length;
   MapView.clearCandidatePreview();
   MapView.clearCandidateMarkers();
+  MapView.clearTaxiRadius();
   document.getElementById('candidate-panel').classList.add('hidden');
   showOverlay('overlay-gameover');
 }
@@ -399,6 +459,7 @@ function showResult() {
   if (lastNode) coords.push([lastNode.lat, lastNode.lng]);
   MapView.drawRoute(coords);
   MapView.clearCandidateMarkers();
+  MapView.clearTaxiRadius();
 
   document.getElementById('candidate-panel').classList.add('hidden');
   showOverlay('overlay-result');
@@ -420,7 +481,7 @@ function onDestinationMarkerClick() {
 
 function renderNewGameOnMap() {
   MapView.setDestination(Game.destinationNode(), onDestinationMarkerClick);
-  MapView.setCurrent(Game.currentNode(), true);
+  MapView.setCurrent(Game.currentNode(), true, onSelfMarkerClick);
   Game.state.visitedIds.forEach(id => {
     const node = Game.data.placesById.get(id) || Game.data.stationsById.get(id);
     if (node) MapView.markVisited(node, Game.state.discoveredIds.includes(id));
@@ -429,6 +490,7 @@ function renderNewGameOnMap() {
 
 function startNewGame(difficulty) {
   Game.newGame(difficulty);
+  taxiCircleVisible = false;
   MapView.clearRoute();
   MapView.visitedLayer.clearLayers();
   renderNewGameOnMap();

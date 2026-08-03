@@ -112,12 +112,32 @@ const MapView = {
     if (onClick) this.destinationMarker.on('click', onClick);
   },
 
-  setCurrent(node, focus) {
+  // onClickを渡すと自分自身(現在地)のマーカーもクリックできるようにする
+  // (2026-08-03、ユーザー指示: タクシーで移動可能な範囲を円で表示するための
+  // トリガーとして使う。showTaxiRadius参照)。
+  setCurrent(node, focus, onClick) {
     if (this.currentMarker) this.map.removeLayer(this.currentMarker);
     this.currentMarker = L.marker([node.lat, node.lng], {
-      icon: L.divIcon({ className: '', html: '<div style="font-size:28px;line-height:28px;">🚶</div>', iconSize: [28, 28], iconAnchor: [14, 28] }),
+      icon: L.divIcon({ className: 'self-marker', html: '<div style="font-size:28px;line-height:28px;">🚶</div>', iconSize: [28, 28], iconAnchor: [14, 28] }),
     }).bindTooltip(node.name, { permanent: false }).addTo(this.map);
+    if (onClick) this.currentMarker.on('click', onClick);
     if (focus) this.map.setView([node.lat, node.lng], Math.max(this.map.getZoom(), 6));
+  },
+
+  // タクシーで移動可能な範囲(所持金から逆算した半径)を円で示す
+  // (2026-08-03、ユーザー指示。自分の現在地マーカーをクリックしたときに
+  // トグル表示する)。
+  showTaxiRadius(node, radiusKm) {
+    if (this.taxiRadiusLayer) this.map.removeLayer(this.taxiRadiusLayer);
+    if (radiusKm <= 0) { this.taxiRadiusLayer = null; return; }
+    this.taxiRadiusLayer = L.circle([node.lat, node.lng], {
+      radius: radiusKm * 1000, className: 'taxi-radius-circle',
+      color: '#E8A33D', weight: 2, fillColor: '#E8A33D', fillOpacity: 0.08, interactive: false,
+    }).addTo(this.map);
+  },
+
+  clearTaxiRadius() {
+    if (this.taxiRadiusLayer) { this.map.removeLayer(this.taxiRadiusLayer); this.taxiRadiusLayer = null; }
   },
 
   // 観光名所到着時、そのピン(現在地マーカー)に公式ホームページへのリンクを
