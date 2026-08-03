@@ -404,8 +404,22 @@ function showResult() {
   showOverlay('overlay-result');
 }
 
+// 目的地の🚩マーカーをクリックした際の処理(2026-08-03、ユーザー指摘の
+// 不具合修正)。現在地から実際に選べる駅候補の中に目的地があれば移動を
+// 実行し、無ければ(所持金不足・徒歩圏外・経路なし等)理由をtoastで示す。
+function onDestinationMarkerClick() {
+  const dest = Game.destinationNode();
+  if (!dest) return;
+  const match = Game.getMapStationCandidates().find(c => c.targetType === 'transport' && c.targetId === dest.id);
+  if (match) {
+    onChooseCandidate(match);
+    return;
+  }
+  toast('現在地から目的地への直接の経路が見つかりません。近くの駅を経由してください。');
+}
+
 function renderNewGameOnMap() {
-  MapView.setDestination(Game.destinationNode());
+  MapView.setDestination(Game.destinationNode(), onDestinationMarkerClick);
   MapView.setCurrent(Game.currentNode(), true);
   Game.state.visitedIds.forEach(id => {
     const node = Game.data.placesById.get(id) || Game.data.stationsById.get(id);

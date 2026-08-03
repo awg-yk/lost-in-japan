@@ -242,13 +242,66 @@ const Game = {
   // (Movement.generateAllReachableStations参照。詰み回避等のロジックに
   // 影響するgetCandidates()自体は変更していない)。
   getMapStationCandidates() {
-    if (this.state.currentNodeType !== 'transport') return [];
-    return Movement.generateAllReachableStations({
-      currentNode: { ...this.currentNode(), _type: this.state.currentNodeType },
-      money: this.state.money,
-      stationsById: this.data.stationsById,
-      discoveredIds: this.state.discoveredIds,
-    });
+    const cur = this.currentNode();
+    if (!cur) return [];
+    if (this.state.currentNodeType === 'transport') {
+      return Movement.generateAllReachableStations({
+        currentNode: { ...cur, _type: this.state.currentNodeType },
+        money: this.state.money,
+        stationsById: this.data.stationsById,
+        discoveredIds: this.state.discoveredIds,
+      });
+    }
+
+    // 2026-08-03、ユーザー指摘の不具合修正: 観光名所(place)にいるときは
+    // 駅の候補が一件も生成されておらず、地図上で駅をクリックしても反応
+    // しなかった(所持金で行ける駅を辿るgenerateAllReachableStationsは
+    // 「駅から駅へ」しか考慮しておらず、観光地からの帰路を扱っていな
+    // かったため)。movement.js側のgenerateCandidates()には「徒歩圏内の
+    // 駅」+「孤立防止用の最寄り駅」が常に保証されているので、地図表示
+    // 専用のこの関数でも同じ考え方を再現する。
+    const lowStat = this.state.hunger <= 0 || this.state.stamina <= 0;
+    const radiusKm = lowStat ? Movement.WALK_RADIUS_KM_LOW_STAT : Movement.WALK_RADIUS_KM_DEFAULT;
+    const discoveredSet = new Set(this.state.discoveredIds);
+    const results = [];
+    const seen = new Set();
+
+    for (const { node, distanceKm } of Movement.getNearbyNodes(cur.lat, cur.lng, radiusKm, this.data.spatialIndex, cur.id)) {
+      if (node._type !== 'transport') continue;
+      seen.add(node.id);
+      results.push({
+        key: `map_walk_transport_${node.id}`,
+        targetId: node.id,
+        targetType: 'transport',
+        targetName: node.name,
+        mode: 'walk',
+        cost: 0,
+        distanceKm,
+        isNew: !discoveredSet.has(node.id),
+        category: '移動',
+      });
+    }
+
+    // 半径外でも、最寄り駅だけは孤立防止のため必ず候補に加える
+    // (movement.js側の同種ロジックと同じ考え方)。
+    if (cur.nearestStationId != null && !seen.has(cur.nearestStationId)) {
+      const station = this.data.stationsById.get(cur.nearestStationId);
+      if (station) {
+        results.push({
+          key: `map_walk_transport_${station.id}`,
+          targetId: station.id,
+          targetType: 'transport',
+          targetName: station.name,
+          mode: 'walk',
+          cost: 0,
+          distanceKm: Movement.haversineKm(cur.lat, cur.lng, station.lat, station.lng),
+          isNew: !discoveredSet.has(station.id),
+          category: '移動',
+        });
+      }
+    }
+
+    return results;
   },
 
   // 2026-08-03、ユーザー指示: 観光地は日本全国すべてを地図上に表示したいが、

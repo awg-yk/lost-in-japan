@@ -96,11 +96,20 @@ const MapView = {
     if (this.previewLayer) this.previewLayer.clearLayers();
   },
 
-  setDestination(node) {
+  // onClickを渡すと目的地マーカー自体もクリックできるようにする(2026-08-03、
+  // ユーザー指摘の不具合修正: 以前はクリックしても無反応だった。目的地の
+  // 駅がちょうど候補マーカーと同じ座標に重なり、クリックがこちらに奪われて
+  // いたため)。
+  setDestination(node, onClick) {
     if (this.destinationMarker) this.map.removeLayer(this.destinationMarker);
-    this.destinationMarker = L.marker([node.lat, node.lng], { icon: iconFor(node.type, 26) })
-      .bindTooltip(`🏁 目的地: ${node.name}`, { permanent: false })
-      .addTo(this.map);
+    this.destinationMarker = L.marker([node.lat, node.lng], {
+      icon: L.divIcon({
+        className: 'destination-flag-marker',
+        html: '<div style="font-size:28px;line-height:28px;">🚩</div>',
+        iconSize: [28, 28], iconAnchor: [6, 28],
+      }),
+    }).bindTooltip(`目的地: ${node.name}`, { permanent: false }).addTo(this.map);
+    if (onClick) this.destinationMarker.on('click', onClick);
   },
 
   setCurrent(node, focus) {

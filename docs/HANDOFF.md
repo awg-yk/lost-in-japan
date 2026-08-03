@@ -1648,3 +1648,36 @@ officialUrl全地点の8割以上(約1600件)が入ってしまい、renderCandi
 既存の探索深さの上限(表示件数の上限ではなく計算量対策。今回のユーザー
 指示の対象外)によって現実的な件数に収まり、低ズーム0.9ms・高ズーム2.2ms
 といずれも軽量だった。fixes/fixes2(9件)PASS。
+
+### 19.2 追記(2026-08-03): 目的地クリックと観光地からの駅クリックが無反応だった不具合、絵文字変更
+
+ユーザー報告2件の実バグを修正した。
+
+**① 目的地マーカーをクリックしても無反応**: `MapView.setDestination()`が
+作る目的地マーカーには元々クリックハンドラが付いておらず、しかも目的地の
+駅がちょうど候補マーカー(candidateLayer)と同じ座標に重なることが多いため、
+目的地マーカーがクリックを奪って何も起きないように見えていた。
+`setDestination(node, onClick)`にクリックコールバックを渡せるようにし、
+main.jsの`onDestinationMarkerClick()`で、その時点の
+`Game.getMapStationCandidates()`から目的地を探して見つかれば
+`onChooseCandidate()`を実行、見つからなければ(所持金不足・経路なし等)
+理由をtoastで示すようにした。あわせて目的地アイコンをiconFor(駅なら🚉等)
+から固定の🚩に変更(ユーザー指示)。
+
+**② 観光地から駅をクリックしても無反応**: `Game.getMapStationCandidates()`が
+`if (currentNodeType !== 'transport') return [];`と、駅にいるときしか
+候補を返さない実装だった。徒歩で観光地(place)に来た後、駅への帰路が
+地図上に一件も表示されていなかった(=クリックする対象が無かった)。
+movement.js側のgenerateCandidates()には「徒歩圏内の駅」+「孤立防止用の
+最寄り駅」が常に保証されているが、地図表示専用のこの関数はそれを経由
+しておらず見落としていた。`Game.getMapStationCandidates()`にplace用の
+分岐を追加し、`Movement.getNearbyNodes()`で徒歩圏内の駅を、
+`nearestStationId`で孤立防止用の最寄り駅を返すようにした。
+
+**③ 絵文字変更**(ユーザー指示): 休憩するボタンを💺→😴に変更
+(index.html)。目的地は上記のとおり🚩に統一。
+
+実機確認: ①遠すぎる目的地クリックで適切なtoast、直接1駅で行ける目的地に
+差し替えてクリックすると実際に`arrived:true`まで到達。②観光地に徒歩移動後
+`getMapStationCandidates()`が11件返り、うち1件クリックで実際に駅へ戻れる
+ことを確認。fixes/fixes2(9件)・regression(5件)全PASS。
