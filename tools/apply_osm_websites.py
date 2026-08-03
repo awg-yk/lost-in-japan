@@ -52,6 +52,16 @@ DECORATION_RE = re.compile(r'[\s　「」『』（）\(\)【】\[\]〔〕・･,
 TRAILING_NOISE = ('(旧)', '旧', '跡地')
 
 
+def normalize_url(url):
+    """同一施設の重複ノード(入口・建物本体など)が別々のURL表記(末尾スラッシュ
+    やhttp/httpsの違いだけ)で登録されているケースを、比較のためだけに揃える。
+    実際に採用するURLは元の表記(候補中の最短)をそのまま使う。"""
+    u = (url or '').strip().lower()
+    u = re.sub(r'^https?://', '', u)
+    u = re.sub(r'^www\.', '', u)
+    return u.rstrip('/')
+
+
 def normalize_name(name):
     """突合用に名前を正規化する。全角半角・空白・括弧類の揺れを吸収するが、
     語そのものは変えない(「城跡」と「城」を同一視する等はしない。別施設の
@@ -126,9 +136,16 @@ def main():
     ambiguous_place = ambiguous_osm = 0
     for pi, cands in cand_for_place.items():
         if len(cands) > 1:
-            ambiguous_place += 1
-            continue
-        d, r = cands[0]
+            # 同一施設の重複ノード(入口・建物本体など)がURLも実質同じなら
+            # 曖昧とはみなさず、最も近い候補を採用する。URLが食い違う場合
+            # (例: 新旧ドメインが混在)は判断できないので従来どおり捨てる。
+            urls = {normalize_url(r['website']) for _, r in cands}
+            if len(urls) > 1:
+                ambiguous_place += 1
+                continue
+            d, r = min(cands, key=lambda x: x[0])
+        else:
+            d, r = cands[0]
         if len(places_for_osm.get(id(r), ())) > 1:
             ambiguous_osm += 1
             continue
