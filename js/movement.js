@@ -10,6 +10,10 @@ const HITCHHIKE_BASE_RATE_FERRY = 0.30;
 const HITCHHIKE_LOW_STAT_PENALTY = 0.15;
 const HITCHHIKE_SCORE_PENALTY = 0.04;
 const MAX_CANDIDATES = 6;
+// 「主要駅」(接続数が多いハブ駅)とみなす閾値。地図の低ズーム時に間引く
+// 基準として、候補選定側(下記generateCandidates)と地図表示側
+// (generateAllReachableStations/main.js)の両方で共有する。
+const MAJOR_STATION_MIN_CONNECTIONS = 3;
 
 // 鉄道運賃(2026-08-03、ユーザー指示で改訂)。以前はデータ生成時に
 // 区間ごとの直線距離から `max(200, round(dist*12, -2))` (100円単位)で
@@ -723,7 +727,6 @@ function generateCandidates(ctx) {
     // 選ばれることがあるため、クォータが埋まっている場合はスコア最下位の
     // 1件を削って主要駅を代わりに入れる。
     if (cat === '移動') {
-      const MAJOR_STATION_MIN_CONNECTIONS = 3;
       const majorPool = contested
         .filter(c => c.category === '移動' && c.mode !== 'walk' && !chosenKeys.has(c.key))
         .filter(c => {
@@ -876,4 +879,5 @@ window.Movement = {
   categoryOf,
   railFare,
   generateAllReachableStations,
+  MAJOR_STATION_MIN_CONNECTIONS,
 };

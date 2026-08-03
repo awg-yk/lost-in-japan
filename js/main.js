@@ -199,11 +199,15 @@ function blockedPlaceTooltipHtml(node, distanceKm) {
 // 低ズーム(国土全体表示)ではほぼ全件がビューポート内に入ってしまい、
 // 数百〜数千件のマーカーを毎回作り直すと目に見えて重くなる(実測: 約1600件で
 // 描画に160ms以上、パン操作の追従が明らかに遅れる)。そのため、ある程度
-// ズームインするまでは観光地マーカーを間引く(駅は数が少なく実害が出にくい
-// ため、こちらは常に表示するが安全のため上限だけ設ける)。
+// ズームインするまでは観光地マーカーを間引く。
+// 駅は「上限件数で機械的に間引く」のではなく(2026-08-03、ユーザー指摘:
+// 全部見せた上で、多すぎる場合は主要駅だけに絞りたい)、低ズームでは
+// 主要駅(接続数が多いハブ駅、Movement.MAJOR_STATION_MIN_CONNECTIONS)だけを
+// 表示し、ズームインするとビューポートが狭まって表示件数も自然に絞られる
+// ため、その時点で周辺の全駅を表示する2段階の詳細度(LOD)にする。
 const PLACE_MARKERS_MIN_ZOOM = 9;
 const PLACE_MARKERS_MAX_COUNT = 300;
-const STATION_MARKERS_MAX_COUNT = 300;
+const STATION_ALL_MIN_ZOOM = 10;
 
 // 現在の地図表示範囲(ビューポート)内にある駅・観光地から、地図マーカー用の
 // item配列を組み立てる。駅は所持金で移動できるものすべて(Game.getMapStationCandidates
@@ -216,21 +220,22 @@ function buildMapItems() {
   const bounds = MapView.map.getBounds();
   const zoom = MapView.map.getZoom();
 
-  const stationItems = Game.getMapStationCandidates()
+  const stationsMajorOnly = zoom < STATION_ALL_MIN_ZOOM;
+  let stationItems = Game.getMapStationCandidates()
     .map(c => {
       const node = targetNodeOf(c);
       if (!node || !bounds.contains([node.lat, node.lng])) return null;
       const emoji = (window.TYPE_ICONS && window.TYPE_ICONS[node.type]) || '🚉';
       return { kind: 'station', candidate: c, node, emoji, tooltipHtml: candidateTooltipHtml(c), isNew: c.isNew };
     })
-    .filter(Boolean)
-    // 近い順に残す(件数が多い場合、現在地から遠すぎて実用性の低いものから間引く)。
-    .sort((a, b) => a.candidate.distanceKm - b.candidate.distanceKm)
-    .slice(0, STATION_MARKERS_MAX_COUNT);
+    .filter(Boolean);
+  if (stationsMajorOnly) {
+    stationItems = stationItems.filter(item => (item.node.connections || []).length >= Movement.MAJOR_STATION_MIN_CONNECTIONS);
+  }
 
   const placesHiddenByZoom = zoom < PLACE_MARKERS_MIN_ZOOM;
   if (placesHiddenByZoom) {
-    return { currentNode, items: stationItems, placesHiddenByZoom };
+    return { currentNode, items: stationItems, placesHiddenByZoom, stationsMajorOnly };
   }
 
   const placeItems = Game.getAllPlacesForMap()
@@ -252,7 +257,7 @@ function buildMapItems() {
       return { kind: 'place', place: node, node, emoji, tooltipHtml, isNew: info.isNew, walkable: info.walkable, blocked: !info.walkable };
     });
 
-  return { currentNode, items: [...stationItems, ...placeItems], placesHiddenByZoom };
+  return { currentNode, items: [...stationItems, ...placeItems], placesHiddenByZoom, stationsMajorOnly };
 }
 
 // 地図マーカーのクリックを、駅(候補選択)と観光地(徒歩)とで振り分ける。
@@ -343,11 +348,12 @@ function renderCandidates() {
     return;
   }
 
-  const { currentNode, items, placesHiddenByZoom } = buildMapItems();
+  const { currentNode, items, placesHiddenByZoom, stationsMajorOnly } = buildMapItems();
   const stationCount = items.filter(i => i.kind === 'station').length;
   const placeCount = items.filter(i => i.kind === 'place').length;
+  const stationLabel = stationsMajorOnly ? `駅${stationCount}件(主要駅のみ・拡大で周辺の駅も表示)` : `駅${stationCount}件`;
   const zoomHint = placesHiddenByZoom ? '観光地表示にはもう少しズームインしてください。' : `観光地${placeCount}件`;
-  list.innerHTML = `<div class="map-move-hint">🗺️ マーカーにカーソルを合わせると詳細、クリックで移動します。（表示中: 駅${stationCount}件・${zoomHint}）</div>`;
+  list.innerHTML = `<div class="map-move-hint">🗺️ マーカーにカーソルを合わせると詳細、クリックで移動します。（表示中: ${stationLabel}・${zoomHint}）</div>`;
   MapView.renderCandidateMarkers(items, currentNode, onMapMarkerClick);
 }
 
