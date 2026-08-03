@@ -236,6 +236,65 @@ const Game = {
     return candidates;
   },
 
+  // 2026-08-03、ユーザー指示: 地図モードでは所持金で移動できる駅を
+  // 「すべて」表示したいため、getCandidates()のカテゴリー別クォータ・
+  // プログレスフィルタを経由しない専用の取得口を用意する
+  // (Movement.generateAllReachableStations参照。詰み回避等のロジックに
+  // 影響するgetCandidates()自体は変更していない)。
+  getMapStationCandidates() {
+    if (this.state.currentNodeType !== 'transport') return [];
+    return Movement.generateAllReachableStations({
+      currentNode: { ...this.currentNode(), _type: this.state.currentNodeType },
+      money: this.state.money,
+      stationsById: this.data.stationsById,
+      discoveredIds: this.state.discoveredIds,
+    });
+  },
+
+  // 2026-08-03、ユーザー指示: 観光地は日本全国すべてを地図上に表示したいが、
+  // 実際に歩いて移動できるのは徒歩圏内(Movement.WALK_RADIUS_KM_*)だけに
+  // したい。表示用に全地点へ現在地からの距離を付けて返す(officialUrlを
+  // 持つ地点のみ。§18(データ拡充)以降、実際に移動候補になるのはこの
+  // 集合だけという既存の設計を踏襲している)。
+  getAllPlacesForMap() {
+    const cur = this.currentNode();
+    if (!cur) return [];
+    const lowStat = this.state.hunger <= 0 || this.state.stamina <= 0;
+    const radiusKm = lowStat ? Movement.WALK_RADIUS_KM_LOW_STAT : Movement.WALK_RADIUS_KM_DEFAULT;
+    const discoveredSet = new Set(this.state.discoveredIds);
+    const result = [];
+    for (const p of this.data.places) {
+      if (!p.officialUrl) continue;
+      const distanceKm = Movement.haversineKm(cur.lat, cur.lng, p.lat, p.lng);
+      result.push({ place: p, distanceKm, walkable: distanceKm <= radiusKm, isNew: !discoveredSet.has(p.id) });
+    }
+    return result;
+  },
+
+  // 徒歩圏外の観光地がクリックされた場合はここで弾く(main.js側でwalkable
+  // かどうかを見て呼び分けてもよいが、ゲーム状態を変更する判定なので
+  // Game側に置く)。戻り値はchooseCandidateと同じ形({ ok, message, ... })。
+  walkToPlace(placeId) {
+    const place = this.data.placesById.get(placeId);
+    if (!place) return { ok: false, message: '地点が見つかりません。' };
+    const cur = this.currentNode();
+    const lowStat = this.state.hunger <= 0 || this.state.stamina <= 0;
+    const radiusKm = lowStat ? Movement.WALK_RADIUS_KM_LOW_STAT : Movement.WALK_RADIUS_KM_DEFAULT;
+    const distanceKm = Movement.haversineKm(cur.lat, cur.lng, place.lat, place.lng);
+    if (distanceKm > radiusKm) {
+      return { ok: false, blocked: true, message: '最寄り駅まで移動してください。' };
+    }
+    return this.chooseCandidate({
+      key: `walk_place_${place.id}`,
+      targetId: place.id,
+      targetType: 'place',
+      targetName: place.name,
+      mode: 'walk',
+      cost: 0,
+      distanceKm,
+    });
+  },
+
   // 移動候補を確定させる。戻り値: { ok, message, arrived }
   chooseCandidate(candidate) {
     const s = this.state;

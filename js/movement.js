@@ -11,6 +11,30 @@ const HITCHHIKE_LOW_STAT_PENALTY = 0.15;
 const HITCHHIKE_SCORE_PENALTY = 0.04;
 const MAX_CANDIDATES = 6;
 
+// 鉄道運賃(2026-08-03、ユーザー指示で改訂)。以前はデータ生成時に
+// 区間ごとの直線距離から `max(200, round(dist*12, -2))` (100円単位)で
+// 個別に計算した運賃をstations.jsonへ埋め込み、乗り換え(通し)候補では
+// その区間運賃を単純合計していた。都市部など駅間が密な区間では、多くの
+// 区間が最低運賃200円で頭打ちになるため、乗り換え回数が増えるほど
+// 「1駅ごとに200円ずつ」加算されるだけの不自然な運賃になっていた
+// (ユーザー指摘)。そこで運賃をデータ側の値ではなく、隣駅(基準距離以内)は
+// 一律200円、それを超えた分だけ距離に応じて加算する連続的な式に変更し、
+// 実行時にstations.json由来のdistanceKm(直線距離の合計)から都度計算する
+// ようにした(データの作り直しは不要)。10円単位に丸める。
+const RAIL_BASE_FARE = 200;
+// 隣接駅とみなす距離(全国の駅間隔の実測分布を踏まえた目安。これ以下の
+// 移動は距離に関わらず基本運賃のみとする)。
+const RAIL_ADJACENT_KM = 3;
+// 基本運賃を超えた分の追加運賃(円/km)。以前のデータ生成時の単価(12円/km)を
+// そのまま踏襲しつつ、10円単位に丸める。
+const RAIL_FARE_PER_KM = 12;
+
+function railFare(distanceKm) {
+  if (distanceKm <= RAIL_ADJACENT_KM) return RAIL_BASE_FARE;
+  const raw = RAIL_BASE_FARE + (distanceKm - RAIL_ADJACENT_KM) * RAIL_FARE_PER_KM;
+  return Math.round(raw / 10) * 10;
+}
+
 // 2026-07-31: ユーザー指示により、候補地をカテゴリー別(歴史・自然・温泉・
 // 道の駅・その他の観光目的と、ゴールに近づく駅・港等の「移動」)に整理して
 // 表示できるようにする。observedデータのtype値からカテゴリーを機械的に
@@ -379,16 +403,19 @@ function generateCandidates(ctx) {
       const discovery = effectiveDiscovery(toNode);
       const distanceKm = haversineKm(currentNode.lat, currentNode.lng, toNode.lat, toNode.lng);
       const flightOnly = conn.requiresTransport.length === 1 && conn.requiresTransport[0] === 'flight';
+      // 鉄道はdata由来のconn.costではなく、実行時に距離から運賃を計算する
+      // (上記railFare参照。飛行機・フェリーは従来どおりdataのconn.costを使う)。
+      const fare = conn.mode === 'rail' ? railFare(distanceKm) : conn.cost;
 
       // 有料の交通機関候補(所持金が足りる場合のみ。§7.1)
-      if (money >= conn.cost) {
+      if (money >= fare) {
         result.push({
-          key: `${conn.mode}_${currentNode.id}_${toNode.id}_${conn.cost}`,
+          key: `${conn.mode}_${currentNode.id}_${toNode.id}_${fare}`,
           targetId: toNode.id,
           targetType: 'transport',
           targetName: toNode.name,
           mode: conn.mode,
-          cost: conn.cost,
+          cost: fare,
           distanceKm,
           isBudget: !!conn.isBudget,
           discoveryScore: toNode.discoveryScore || 0,
@@ -405,7 +432,7 @@ function generateCandidates(ctx) {
       // 「お金が無いときの最終手段」という位置づけをはっきりさせるため。
       // また、直前にヒッチハイクが失敗した場合は allowHitchhike=false になり、
       // 別の選択肢を選ぶまで候補からヒッチハイクを一切外す(強すぎる、との要望)。
-      if (!flightOnly && allowHitchhike && money < conn.cost) {
+      if (!flightOnly && allowHitchhike && money < fare) {
         const isFerry = conn.requiresTransport.includes('ferry');
         const baseRate = isFerry ? HITCHHIKE_BASE_RATE_FERRY : HITCHHIKE_BASE_RATE_LAND;
         // 難易度の「ラッキー度」補正(EASYはプラス、HARDはマイナス)。§実装時の裁量。
@@ -443,38 +470,50 @@ function generateCandidates(ctx) {
   // 都心部などノード密度が高い駅では探索が爆発的に広がりうるため、探索する
   // ノード数自体にも上限を設けて毎ターンの計算量を抑える(2026-07-31)。
   const FAR_CANDIDATE_MAX_VISITED = 600;
-  function buildFarCandidates() {
-    if (currentNode._type !== 'transport') return [];
+  // 2026-08-03: 運賃をdata由来のconn.cost合計ではなく、区間距離の累積から
+  // railFare()で都度計算する方式に変更(上記railFare参照。1駅ごとに200円ずつ
+  // 増えるだけの不自然な運賃を解消するため)。飛行機・フェリーを挟む経路は
+  // 単一の距離ベース運賃と馴染まないため、通し候補は鉄道接続のみを辿る。
+  // maxHopsを指定しない場合はFAR_CANDIDATE_MAX_HOPSを使う(地図全表示用の
+  // buildAllReachableStationsだけより広く辿れるようにするための引数)。
+  function railReachability(maxHops = FAR_CANDIDATE_MAX_HOPS) {
     const startId = currentNode.id;
-    const best = new Map([[startId, { cost: 0, distanceKm: 0, hops: 0 }]]);
+    const best = new Map([[startId, { distanceKm: 0, hops: 0 }]]);
     const visited = new Set();
     const frontier = new Map([[startId, 0]]);
     while (frontier.size > 0 && visited.size < FAR_CANDIDATE_MAX_VISITED) {
       let curId = null;
-      let curCost = Infinity;
-      for (const [id, c] of frontier) { if (c < curCost) { curCost = c; curId = id; } }
+      let curDist = Infinity;
+      for (const [id, d] of frontier) { if (d < curDist) { curDist = d; curId = id; } }
       frontier.delete(curId);
       if (visited.has(curId)) continue;
       visited.add(curId);
       const curBest = best.get(curId);
-      if (curBest.hops >= FAR_CANDIDATE_MAX_HOPS) continue;
+      if (curBest.hops >= maxHops) continue;
       const node = stationsById.get(curId);
       if (!node) continue;
       for (const conn of node.connections || []) {
-        if (conn.mode === 'walk') continue;
-        const nextCost = curCost + conn.cost;
-        if (nextCost > money) continue;
+        if (conn.mode !== 'rail') continue;
         const neighbor = stationsById.get(conn.toId);
         if (!neighbor) continue;
         const legDist = haversineKm(node.lat, node.lng, neighbor.lat, neighbor.lng);
+        const nextDist = curBest.distanceKm + legDist;
+        if (railFare(nextDist) > money) continue;
         const existing = best.get(conn.toId);
-        if (!existing || nextCost < existing.cost) {
-          best.set(conn.toId, { cost: nextCost, distanceKm: curBest.distanceKm + legDist, hops: curBest.hops + 1 });
-          if (!visited.has(conn.toId)) frontier.set(conn.toId, nextCost);
+        if (!existing || nextDist < existing.distanceKm) {
+          best.set(conn.toId, { distanceKm: nextDist, hops: curBest.hops + 1 });
+          if (!visited.has(conn.toId)) frontier.set(conn.toId, nextDist);
         }
       }
     }
     best.delete(startId);
+    return best;
+  }
+
+  function buildFarCandidates() {
+    if (currentNode._type !== 'transport') return [];
+    const startId = currentNode.id;
+    const best = railReachability(FAR_CANDIDATE_MAX_HOPS);
 
     const results = [];
     for (const [id, info] of best) {
@@ -485,13 +524,14 @@ function generateCandidates(ctx) {
       const progress = progressScore(currentNode, node, destinationNode, ctx.reachability);
       if (progress <= 0) continue; // 遠ざかる通し候補は出さない
       const discovery = effectiveDiscovery(node);
+      const fare = railFare(info.distanceKm);
       results.push({
         key: `far_rail_${startId}_${id}`,
         targetId: id,
         targetType: 'transport',
         targetName: node.name,
         mode: 'rail',
-        cost: info.cost,
+        cost: fare,
         distanceKm: info.distanceKm,
         isBudget: false,
         discoveryScore: node.discoveryScore || 0,
@@ -716,6 +756,105 @@ function generateCandidates(ctx) {
   return chosen;
 }
 
+// 2026-08-03、ユーザー指示: 地図モードでは(下部カード一覧と違って表示枠に
+// 制限が無いため)「移動する」候補をgenerateCandidates()のカテゴリー別
+// クォータ(移動枠12件)やプログレスフィルタ(目的地方向のみ)で絞り込まず、
+// 所持金で移動できる駅を鉄道・飛行機・船・ヒッチハイクすべて含めて丸ごと
+// 返す。generateCandidates()自体は往復振動対策等の詰み回避ロジックを含む
+// ため変更せず(bot・回帰テストが依存している)、別関数として独立させた。
+// 直接接続(隣接駅)は全モード、乗り換え(通し)は鉄道のみを辿る
+// (railFare参照。飛行機・フェリーを混ぜた運賃は距離ベース運賃と馴染まない)。
+const MAP_FAR_STATION_MAX_HOPS = 6;
+const MAP_FAR_STATION_MAX_VISITED = 2000;
+function generateAllReachableStations(ctx) {
+  const { currentNode, money, stationsById, discoveredIds } = ctx;
+  if (currentNode._type !== 'transport') return [];
+  const discoveredSet = new Set(discoveredIds);
+  const results = [];
+  const seen = new Set();
+
+  for (const conn of currentNode.connections || []) {
+    if (conn.mode === 'walk') continue;
+    const toNode = stationsById.get(conn.toId);
+    if (!toNode) continue;
+    const fare = conn.mode === 'rail'
+      ? railFare(haversineKm(currentNode.lat, currentNode.lng, toNode.lat, toNode.lng))
+      : conn.cost;
+    if (money < fare) continue;
+    if (seen.has(toNode.id)) continue;
+    seen.add(toNode.id);
+    results.push({
+      key: `map_direct_${conn.mode}_${currentNode.id}_${toNode.id}`,
+      targetId: toNode.id,
+      targetType: 'transport',
+      targetName: toNode.name,
+      mode: conn.mode,
+      cost: fare,
+      distanceKm: haversineKm(currentNode.lat, currentNode.lng, toNode.lat, toNode.lng),
+      isBudget: !!conn.isBudget,
+      isNew: !discoveredSet.has(toNode.id),
+      category: '移動',
+      farHops: 1,
+    });
+  }
+
+  // 鉄道の乗り換え(通し)は所持金の許す限り何区間でも辿る
+  // (railFareは距離に対して単調増加なので、Dijkstra的な枝刈りが成立する)。
+  const startId = currentNode.id;
+  const best = new Map([[startId, { distanceKm: 0, hops: 0 }]]);
+  const visited = new Set();
+  const frontier = new Map([[startId, 0]]);
+  while (frontier.size > 0 && visited.size < MAP_FAR_STATION_MAX_VISITED) {
+    let curId = null;
+    let curDist = Infinity;
+    for (const [id, d] of frontier) { if (d < curDist) { curDist = d; curId = id; } }
+    frontier.delete(curId);
+    if (visited.has(curId)) continue;
+    visited.add(curId);
+    const curBest = best.get(curId);
+    if (curBest.hops >= MAP_FAR_STATION_MAX_HOPS) continue;
+    const node = stationsById.get(curId);
+    if (!node) continue;
+    for (const conn of node.connections || []) {
+      if (conn.mode !== 'rail') continue;
+      const neighbor = stationsById.get(conn.toId);
+      if (!neighbor) continue;
+      const legDist = haversineKm(node.lat, node.lng, neighbor.lat, neighbor.lng);
+      const nextDist = curBest.distanceKm + legDist;
+      if (railFare(nextDist) > money) continue;
+      const existing = best.get(conn.toId);
+      if (!existing || nextDist < existing.distanceKm) {
+        best.set(conn.toId, { distanceKm: nextDist, hops: curBest.hops + 1 });
+        if (!visited.has(conn.toId)) frontier.set(conn.toId, nextDist);
+      }
+    }
+  }
+  best.delete(startId);
+
+  for (const [id, info] of best) {
+    if (info.hops <= 1) continue; // 直接接続は上で既に追加済み
+    if (seen.has(id)) continue;
+    const node = stationsById.get(id);
+    if (!node) continue;
+    seen.add(id);
+    results.push({
+      key: `map_far_rail_${startId}_${id}`,
+      targetId: id,
+      targetType: 'transport',
+      targetName: node.name,
+      mode: 'rail',
+      cost: railFare(info.distanceKm),
+      distanceKm: info.distanceKm,
+      isBudget: false,
+      isNew: !discoveredSet.has(id),
+      category: '移動',
+      farHops: info.hops,
+    });
+  }
+
+  return results;
+}
+
 window.Movement = {
   haversineKm,
   gridKeyOf,
@@ -735,4 +874,6 @@ window.Movement = {
   CATEGORY_ORDER,
   CATEGORY_QUOTA,
   categoryOf,
+  railFare,
+  generateAllReachableStations,
 };

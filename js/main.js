@@ -83,6 +83,26 @@ function renderHud() {
   document.getElementById('stat-time').textContent = fmtTime(s.playTimeSec);
   document.getElementById('gauge-hunger').style.width = s.hunger + '%';
   document.getElementById('gauge-stamina').style.width = s.stamina + '%';
+  renderHudActionButtons();
+}
+
+// 空腹/体力ゲージの横に置いた「食事をとる/休憩する/温泉に入る」ボタンの
+// 有効・無効と表示/非表示を同期する(2026-08-03、ユーザー指示。以前は
+// 下部の候補パネルの別メニューだったカードの代替)。
+function renderHudActionButtons() {
+  const eatBtn = document.getElementById('hud-btn-eat');
+  const restBtn = document.getElementById('hud-btn-rest');
+  const onsenBtn = document.getElementById('hud-btn-onsen');
+  eatBtn.disabled = !Game.canAffordEat();
+  eatBtn.title = `食事をとる(¥${window.EAT_COST}、空腹 +${window.EAT_HUNGER_GAIN}）`;
+  restBtn.disabled = !Game.canAffordRest();
+  restBtn.title = `休憩する(¥${window.REST_COST}、体力 +${window.REST_STAMINA_GAIN}・空腹 +${window.REST_HUNGER_GAIN}）`;
+  const showOnsen = Game.atOnsen();
+  onsenBtn.classList.toggle('hidden', !showOnsen);
+  if (showOnsen) {
+    onsenBtn.disabled = !Game.canAffordOnsen();
+    onsenBtn.title = `温泉に入る(¥${window.ONSEN_COST}、体力 → 100%）`;
+  }
 }
 
 function candidateMetaText(c) {
@@ -108,68 +128,6 @@ function candidatePreviewText(c) {
   const staminaLoss = Math.round(c.distanceKm * window.STAMINA_DECAY_PER_KM_WALK);
   const fmt = (n) => (n > 0 ? `-${n}` : '0');
   return `空腹 ${fmt(hungerLoss)} ・ 体力 ${fmt(staminaLoss)}`;
-}
-
-// ② 食事も、選べない場合(所持金不足・満腹)は非表示にせず薄い色で表示する
-// (2026-07-31、ユーザー指示。アルバイトと同じ扱いに揃えた)。実際の地点ごとの
-// 飲食店データが無い暫定実装として、駅・空港・観光名所であれば一律に利用できる
-// 候補として出す(§実装時の裁量)。
-function buildEatCard() {
-  const canEat = Game.canAffordEat();
-  const card = document.createElement('button');
-  card.className = 'candidate-card candidate-card--action' + (canEat ? '' : ' candidate-card--disabled');
-  card.disabled = !canEat;
-  card.innerHTML = `
-    <div class="candidate-cost"><span class="cost-label">料金</span>${fmtMoney(window.EAT_COST)}</div>
-    <div class="candidate-icon">🍙</div>
-    <div class="candidate-body">
-      <div class="candidate-name">食事をとる</div>
-      <div class="candidate-meta">空腹を回復</div>
-      <div class="candidate-preview">空腹 +${window.EAT_HUNGER_GAIN}</div>
-    </div>
-  `;
-  if (canEat) card.addEventListener('click', onEat);
-  return card;
-}
-
-// ③ 「休憩する」がデフォルトの体力回復手段(どこでも利用可、控えめな回復。
-// 2026-07-31: 空腹も少し回復するようになった)。②と同様、選べない場合も
-// 薄い色で表示する。
-function buildRestCard() {
-  const canRest = Game.canAffordRest();
-  const card = document.createElement('button');
-  card.className = 'candidate-card candidate-card--action' + (canRest ? '' : ' candidate-card--disabled');
-  card.disabled = !canRest;
-  card.innerHTML = `
-    <div class="candidate-cost"><span class="cost-label">料金</span>${fmtMoney(window.REST_COST)}</div>
-    <div class="candidate-icon">💺</div>
-    <div class="candidate-body">
-      <div class="candidate-name">休憩する</div>
-      <div class="candidate-meta">体力・空腹を回復</div>
-      <div class="candidate-preview">体力 +${window.REST_STAMINA_GAIN} ・ 空腹 +${window.REST_HUNGER_GAIN}</div>
-    </div>
-  `;
-  if (canRest) card.addEventListener('click', onRest);
-  return card;
-}
-
-// ③ 「温泉に入る」は温泉施設(type==='onsen')限定。体力が100%全回復する。
-function buildOnsenCard() {
-  const canOnsen = Game.canAffordOnsen();
-  const card = document.createElement('button');
-  card.className = 'candidate-card candidate-card--action' + (canOnsen ? '' : ' candidate-card--disabled');
-  card.disabled = !canOnsen;
-  card.innerHTML = `
-    <div class="candidate-cost"><span class="cost-label">料金</span>${fmtMoney(window.ONSEN_COST)}</div>
-    <div class="candidate-icon">♨️</div>
-    <div class="candidate-body">
-      <div class="candidate-name">温泉に入る</div>
-      <div class="candidate-meta">体力が全回復</div>
-      <div class="candidate-preview">体力 → 100%</div>
-    </div>
-  `;
-  if (canOnsen) card.addEventListener('click', onOnsen);
-  return card;
 }
 
 // 移動候補1件分のツールチップHTML(地図マーカーにホバーした際に表示する内容。
@@ -217,143 +175,98 @@ function showOfficialSitePinIfAny(node) {
   });
 }
 
-// ポケモンの戦闘コマンドのように、まず「地図で選ぶ/休憩する」の2択を出す
-// (2026-08-03、ユーザー指示で「移動する/観光する」を統合。以前は候補を
-// カテゴリー別のカード一覧で出していたが、地図上に観光地・駅のマーカーを
-// 直接表示してクリックで移動する方式に変更したため、2つに分けておく意味が
-// 無くなった)。activeMenuはUIだけの状態で、Game.stateには含めない
-// (セーブ不要・行動のたびに一覧へ戻したいため)。
-let activeMenu = null; // null(一覧) | 'map' | 'rest'
+// 2026-08-03、ユーザー指示によりUIを刷新: 「移動する/観光する/休憩する」の
+// 選択メニューを廃止し、常に地図モード(駅・観光地のマーカーを地図上に直接
+// 表示し、クリックで移動する)をデフォルト表示にした。食事・休憩・温泉は
+// HUDのゲージ横ボタン(renderHudActionButtons参照)に移したため、下部の
+// 候補パネルはヒント文だけを表示する軽量なものになっている。
+// 表示範囲が「日本全国」に広がったため、地図の表示中の範囲(ビューポート)に
+// 入っている駅・観光地だけを描画し、パン/ズームのたびに再描画する
+// (setupMapViewportRefresh参照)。
 
-function buildMainMenuButton(icon, label, count, onClick) {
-  const btn = document.createElement('button');
-  const disabled = count === 0;
-  btn.className = 'main-menu-btn' + (disabled ? ' main-menu-btn--disabled' : '');
-  btn.disabled = disabled;
-  btn.innerHTML = `
-    <span class="main-menu-icon">${icon}</span>
-    <span class="main-menu-label">${label}</span>
-    <span class="main-menu-count">${count}件</span>
+// 徒歩圏外の観光地用のツールチップ(「最寄り駅まで移動してください。」)。
+function blockedPlaceTooltipHtml(node, distanceKm) {
+  return `
+    <div class="map-candidate-tooltip map-candidate-tooltip--blocked">
+      <div class="map-candidate-tooltip-name">📍 ${node.name}</div>
+      <div class="map-candidate-tooltip-meta">${fmtKm(distanceKm)} ・ 徒歩圏外</div>
+      <div class="map-candidate-tooltip-preview">最寄り駅まで移動してください。</div>
+    </div>
   `;
-  if (!disabled) btn.addEventListener('click', onClick);
-  return btn;
 }
 
-function renderMainMenu(list, candidates) {
-  // 休憩メニューは食事・休憩・温泉のうち1つでも選べれば件数に数える。
-  const restCount = [Game.canAffordEat(), Game.canAffordRest(), Game.canAffordOnsen() || Game.atOnsen()]
-    .filter(Boolean).length;
+// 全国規模のデータをビューポートだけで絞っても、日本全体が収まるような
+// 低ズーム(国土全体表示)ではほぼ全件がビューポート内に入ってしまい、
+// 数百〜数千件のマーカーを毎回作り直すと目に見えて重くなる(実測: 約1600件で
+// 描画に160ms以上、パン操作の追従が明らかに遅れる)。そのため、ある程度
+// ズームインするまでは観光地マーカーを間引く(駅は数が少なく実害が出にくい
+// ため、こちらは常に表示するが安全のため上限だけ設ける)。
+const PLACE_MARKERS_MIN_ZOOM = 9;
+const PLACE_MARKERS_MAX_COUNT = 300;
+const STATION_MARKERS_MAX_COUNT = 300;
 
-  const menu = document.createElement('div');
-  menu.className = 'main-menu';
-  menu.appendChild(buildMainMenuButton('🗺️', '地図で選ぶ', candidates.length, () => { activeMenu = 'map'; renderCandidates(); }));
-  menu.appendChild(buildMainMenuButton('💺', '休憩する', restCount, () => { activeMenu = 'rest'; renderCandidates(); }));
-  list.appendChild(menu);
-}
-
-function renderBackBar(list, title) {
-  const bar = document.createElement('div');
-  bar.className = 'menu-back-bar';
-  const backBtn = document.createElement('button');
-  backBtn.className = 'menu-back-btn';
-  backBtn.textContent = '← 戻る';
-  backBtn.addEventListener('click', () => { activeMenu = null; renderCandidates(); });
-  bar.appendChild(backBtn);
-  const titleEl = document.createElement('span');
-  titleEl.className = 'menu-back-title';
-  titleEl.textContent = title;
-  bar.appendChild(titleEl);
-  list.appendChild(bar);
-}
-
-// 「地図で選ぶ」モード: 候補カードの一覧は出さず、地図上のマーカーに
-// カーソルを合わせると詳細(運賃・所要距離等)がツールチップで表示され、
-// クリックするとその場で移動する(2026-08-03、ユーザー指示)。
-function renderMapMoveMenu(list, candidates) {
-  const hint = document.createElement('div');
-  hint.className = 'map-move-hint';
-  hint.textContent = candidates.length > 0
-    ? '地図上のマーカーにカーソルを合わせると詳細が表示されます。クリックで移動します。'
-    : '候補が見つかりません。';
-  list.appendChild(hint);
-
+// 現在の地図表示範囲(ビューポート)内にある駅・観光地から、地図マーカー用の
+// item配列を組み立てる。駅は所持金で移動できるものすべて(Game.getMapStationCandidates
+// = movement.jsのカテゴリー別クォータを経由しない全件取得)、観光地は全国
+// すべて(Game.getAllPlacesForMap)を対象にし、それぞれビューポートで絞り込む
+// (全国分を毎回マーカー化すると重いため)。
+function buildMapItems() {
   const currentNode = Game.currentNode();
-  const items = candidates
+  if (!currentNode || !MapView.map) return { currentNode, items: [], placesHiddenByZoom: false };
+  const bounds = MapView.map.getBounds();
+  const zoom = MapView.map.getZoom();
+
+  const stationItems = Game.getMapStationCandidates()
     .map(c => {
       const node = targetNodeOf(c);
-      if (!node) return null;
-      const emoji = (window.TYPE_ICONS && window.TYPE_ICONS[node.type]) || '📍';
-      return { candidate: c, node, emoji, tooltipHtml: candidateTooltipHtml(c) };
+      if (!node || !bounds.contains([node.lat, node.lng])) return null;
+      const emoji = (window.TYPE_ICONS && window.TYPE_ICONS[node.type]) || '🚉';
+      return { kind: 'station', candidate: c, node, emoji, tooltipHtml: candidateTooltipHtml(c), isNew: c.isNew };
     })
-    .filter(Boolean);
-  MapView.renderCandidateMarkers(items, currentNode, onChooseCandidate);
+    .filter(Boolean)
+    // 近い順に残す(件数が多い場合、現在地から遠すぎて実用性の低いものから間引く)。
+    .sort((a, b) => a.candidate.distanceKm - b.candidate.distanceKm)
+    .slice(0, STATION_MARKERS_MAX_COUNT);
+
+  const placesHiddenByZoom = zoom < PLACE_MARKERS_MIN_ZOOM;
+  if (placesHiddenByZoom) {
+    return { currentNode, items: stationItems, placesHiddenByZoom };
+  }
+
+  const placeItems = Game.getAllPlacesForMap()
+    .filter(info => bounds.contains([info.place.lat, info.place.lng]))
+    // 徒歩で実際に行ける地点を優先して残し、間引かれるのは徒歩圏外(見た目の
+    // 参考程度)の地点からにする。同条件内では近い順。
+    .sort((a, b) => (a.walkable === b.walkable ? a.distanceKm - b.distanceKm : (a.walkable ? -1 : 1)))
+    .slice(0, PLACE_MARKERS_MAX_COUNT)
+    .map(info => {
+      const node = info.place;
+      const emoji = (window.TYPE_ICONS && window.TYPE_ICONS[node.type]) || '📍';
+      const candidate = {
+        targetId: node.id, targetType: 'place', targetName: node.name,
+        mode: 'walk', cost: 0, distanceKm: info.distanceKm, isNew: info.isNew,
+      };
+      const tooltipHtml = info.walkable
+        ? candidateTooltipHtml(candidate)
+        : blockedPlaceTooltipHtml(node, info.distanceKm);
+      return { kind: 'place', place: node, node, emoji, tooltipHtml, isNew: info.isNew, walkable: info.walkable, blocked: !info.walkable };
+    });
+
+  return { currentNode, items: [...stationItems, ...placeItems], placesHiddenByZoom };
 }
 
-function renderRestMenu(list) {
-  const actionRow = document.createElement('div');
-  actionRow.className = 'candidate-row';
-  actionRow.appendChild(buildEatCard());
-  actionRow.appendChild(buildRestCard());
-  if (Game.canAffordOnsen() || Game.atOnsen()) actionRow.appendChild(buildOnsenCard());
-  list.appendChild(actionRow);
-}
-
-function renderCandidates() {
-  const list = document.getElementById('candidate-list');
-  list.innerHTML = '';
-  MapView.clearCandidatePreview();
-  const candidates = Game.getCandidates();
-
-  if (activeMenu !== 'map') MapView.clearCandidateMarkers();
-
-  if (activeMenu === null) {
-    renderMainMenu(list, candidates);
+// 地図マーカーのクリックを、駅(候補選択)と観光地(徒歩)とで振り分ける。
+function onMapMarkerClick(item) {
+  if (item.kind === 'station') {
+    onChooseCandidate(item.candidate);
     return;
   }
-  if (activeMenu === 'map') {
-    renderBackBar(list, '🗺️ 地図で選ぶ');
-    renderMapMoveMenu(list, candidates);
-    return;
-  }
-  if (activeMenu === 'rest') {
-    renderBackBar(list, '💺 休憩する');
-    renderRestMenu(list);
-    return;
-  }
+  onWalkToPlace(item.place, item.isNew);
 }
 
-// ポケモンの戦闘メニューのように、行動を1つ選んだら次のターンはまた
-// 「移動する/観光する/休憩する」の一覧に戻す(2026-08-02、ユーザー指示)。
-function onEat() {
-  const result = Game.eat();
-  toast(result.message);
-  renderHud();
-  if (result.gameOver) { showGameOver(); return; }
-  activeMenu = null;
-  renderCandidates();
-}
-
-function onRest() {
-  const result = Game.rest();
-  toast(result.message);
-  renderHud();
-  if (result.gameOver) { showGameOver(); return; }
-  activeMenu = null;
-  renderCandidates();
-}
-
-function onOnsen() {
-  const result = Game.onsen();
-  toast(result.message);
-  renderHud();
-  if (result.gameOver) { showGameOver(); return; }
-  activeMenu = null;
-  renderCandidates();
-}
-
+// 駅マーカー(鉄道・飛行機・フェリー・ヒッチハイク候補)をクリックした際の処理。
 function onChooseCandidate(candidate) {
   MapView.clearCandidatePreview();
-  MapView.clearCandidateMarkers();
   const result = Game.chooseCandidate(candidate);
   toast(result.message);
   renderHud();
@@ -365,7 +278,6 @@ function onChooseCandidate(candidate) {
   // ヒッチハイク失敗や所持金不足の場合は現在地が変わっていないため、
   // 地図上のマーカーも動かさない(移動した見た目にならないようにする)。
   if (!result.ok) {
-    activeMenu = null;
     renderCandidates();
     return;
   }
@@ -379,8 +291,72 @@ function onChooseCandidate(candidate) {
     showResult();
     return;
   }
-  activeMenu = null;
   renderCandidates();
+}
+
+function onWalkToPlace(place, wasNew) {
+  MapView.clearCandidatePreview();
+  const result = Game.walkToPlace(place.id);
+  toast(result.message);
+  if (result.blocked) return; // 徒歩圏外。状態は変わっていないので地図はそのまま。
+  renderHud();
+  if (result.gameOver) { showGameOver(); return; }
+  if (!result.ok) { renderCandidates(); return; }
+  MapView.markVisited(place, wasNew);
+  MapView.setCurrent(place, true);
+  showOfficialSitePinIfAny(place);
+  if (result.arrived) { showResult(); return; }
+  renderCandidates();
+}
+
+function onEat() {
+  const result = Game.eat();
+  toast(result.message);
+  renderHud();
+  if (result.gameOver) { showGameOver(); return; }
+  renderCandidates();
+}
+
+function onRest() {
+  const result = Game.rest();
+  toast(result.message);
+  renderHud();
+  if (result.gameOver) { showGameOver(); return; }
+  renderCandidates();
+}
+
+function onOnsen() {
+  const result = Game.onsen();
+  toast(result.message);
+  renderHud();
+  if (result.gameOver) { showGameOver(); return; }
+  renderCandidates();
+}
+
+function renderCandidates() {
+  const list = document.getElementById('candidate-list');
+  MapView.clearCandidatePreview();
+
+  if (!isGameActive()) {
+    list.innerHTML = '';
+    MapView.clearCandidateMarkers();
+    return;
+  }
+
+  const { currentNode, items, placesHiddenByZoom } = buildMapItems();
+  const stationCount = items.filter(i => i.kind === 'station').length;
+  const placeCount = items.filter(i => i.kind === 'place').length;
+  const zoomHint = placesHiddenByZoom ? '観光地表示にはもう少しズームインしてください。' : `観光地${placeCount}件`;
+  list.innerHTML = `<div class="map-move-hint">🗺️ マーカーにカーソルを合わせると詳細、クリックで移動します。（表示中: 駅${stationCount}件・${zoomHint}）</div>`;
+  MapView.renderCandidateMarkers(items, currentNode, onMapMarkerClick);
+}
+
+// 地図をパン/ズームするたびに、表示範囲内の駅・観光地マーカーを描画し直す
+// (2026-08-03、ユーザー指示。「地図で表示できる範囲が大きくなったので、
+// 表示できる分は全部見せてほしい」への対応。ビューポート外は描画しないので
+// 全国分を毎回マーカー化する重さは発生しない)。
+function setupMapViewportRefresh() {
+  MapView.map.on('moveend zoomend', () => renderCandidates());
 }
 
 function showGameOver() {
@@ -433,7 +409,6 @@ function renderNewGameOnMap() {
 
 function startNewGame(difficulty) {
   Game.newGame(difficulty);
-  activeMenu = null;
   MapView.clearRoute();
   MapView.visitedLayer.clearLayers();
   renderNewGameOnMap();
@@ -479,6 +454,14 @@ function isGameActive() {
   return !!Game.state && !Game.state.arrived && !Game.state.gameOver;
 }
 
+// HUDのゲージ横ボタン(食事をとる/休憩する/温泉に入る)。2026-08-03、
+// ユーザー指示によりゲージのすぐ横に常時表示する形に変更した。
+function setupHudActionButtons() {
+  document.getElementById('hud-btn-eat').addEventListener('click', onEat);
+  document.getElementById('hud-btn-rest').addEventListener('click', onRest);
+  document.getElementById('hud-btn-onsen').addEventListener('click', onOnsen);
+}
+
 function setupIntervals() {
   setInterval(() => {
     if (isGameActive()) {
@@ -504,6 +487,8 @@ async function init() {
   setupResetButton();
   setupPlayAgain();
   setupGameOverRetry();
+  setupHudActionButtons();
+  setupMapViewportRefresh();
   setupIntervals();
 }
 

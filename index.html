@@ -34,13 +34,16 @@
       <span class="label">プレイ時間</span>
       <span class="value" id="stat-time">00:00</span>
     </div>
-    <div class="hud-stat">
+    <div class="hud-stat hud-stat--gauge">
       <span class="label">空腹</span>
       <div class="gauge-wrap"><div class="gauge-bg"><div class="gauge-fill hunger" id="gauge-hunger" style="width:100%"></div></div></div>
+      <button id="hud-btn-eat" class="hud-gauge-btn" title="食事をとる">🍙</button>
     </div>
-    <div class="hud-stat">
+    <div class="hud-stat hud-stat--gauge">
       <span class="label">体力</span>
       <div class="gauge-wrap"><div class="gauge-bg"><div class="gauge-fill stamina" id="gauge-stamina" style="width:100%"></div></div></div>
+      <button id="hud-btn-rest" class="hud-gauge-btn" title="休憩する">💺</button>
+      <button id="hud-btn-onsen" class="hud-gauge-btn hidden" title="温泉に入る">♨️</button>
     </div>
   </div>
 </div>

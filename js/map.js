@@ -54,35 +54,27 @@ const MapView = {
     }).addTo(this.previewLayer);
   },
 
-  // 移動候補を地図上のクリック可能なマーカーとして描画する。
-  // items: [{ candidate, node, emoji, tooltipHtml }]
-  // ホバー(mouseover)で現在地からの直線とツールチップを表示し、
-  // クリックでonClick(candidate)を呼ぶ(2026-08-03、ユーザー指示: 下部の
-  // 候補カード一覧をやめ、観光地・駅を地図上に表示してクリックで移動する形式にした)。
+  // 移動候補(駅・観光地)を地図上のクリック可能なマーカーとして描画する。
+  // items: [{ node, emoji, tooltipHtml, isNew, blocked, ...任意の付随データ }]
+  // ホバー(mouseover)で現在地からの直線とツールチップを表示し、クリックで
+  // onClick(item)を呼ぶ(itemをそのまま返すので、呼び出し側でitem.kind等を
+  // 見て処理を分けられる)。2026-08-03、ユーザー指示:
+  // - 全国の駅・観光地を対象にするため、地図の表示範囲(ビューポート)内だけを
+  //   都度描画し直す方式にした(main.js側がmoveend/zoomendのたびに呼ぶ)。
+  //   そのため、以前ここにあった「候補全体が収まるようパン/ズームする」処理は
+  //   削除した(ビューポート変更のたびに再描画→再度パン、という無限ループに
+  //   なってしまうため。移動時の追従はMapView.setCurrent側のsetViewが担う)。
   renderCandidateMarkers(items, currentNode, onClick) {
     this.candidateLayer.clearLayers();
-
-    // 候補全体(+現在地)が画面内に収まるようにパン/ズームする。上部のHUD
-    // (position:absolute、地図の上に被さる)や下部の候補パネルにマーカーが
-    // 隠れてクリックできなくなるのを防ぐため、それらの高さ分だけ余白を
-    // 大きく取る(showCandidatePreviewと同じ考え方)。
-    if (items.length > 0) {
-      const points = [[currentNode.lat, currentNode.lng], ...items.map(({ node }) => [node.lat, node.lng])];
-      const bounds = L.latLngBounds(points);
-      const mapSize = this.map.getSize();
-      this.map.flyToBounds(bounds, {
-        paddingTopLeft: [24, 90],
-        paddingBottomRight: [24, Math.round(mapSize.y * 0.42)],
-        maxZoom: 13,
-        duration: 0.35,
-      });
-    }
-
-    for (const { candidate, node, emoji, tooltipHtml } of items) {
-      const size = candidate.isNew ? 30 : 24;
+    for (const item of items) {
+      const { node, emoji, tooltipHtml, isNew, blocked } = item;
+      const size = isNew ? 30 : 24;
+      let className = 'candidate-map-marker';
+      if (isNew) className += ' candidate-map-marker--new';
+      if (blocked) className += ' candidate-map-marker--blocked';
       const marker = L.marker([node.lat, node.lng], {
         icon: L.divIcon({
-          className: 'candidate-map-marker' + (candidate.isNew ? ' candidate-map-marker--new' : ''),
+          className,
           html: `<div style="font-size:${size}px;line-height:${size}px;">${emoji}</div>`,
           iconSize: [size, size], iconAnchor: [size / 2, size / 2],
         }),
@@ -90,7 +82,7 @@ const MapView = {
       marker.bindTooltip(tooltipHtml, { direction: 'top', offset: [0, -size / 2], opacity: 0.97 });
       marker.on('mouseover', () => this.previewLine(currentNode, node));
       marker.on('mouseout', () => this.previewLayer.clearLayers());
-      marker.on('click', () => onClick(candidate));
+      marker.on('click', () => onClick(item));
       marker.addTo(this.candidateLayer);
     }
   },
@@ -98,31 +90,6 @@ const MapView = {
   clearCandidateMarkers() {
     if (this.candidateLayer) this.candidateLayer.clearLayers();
     if (this.previewLayer) this.previewLayer.clearLayers();
-  },
-
-  // 現在地から候補地までの直線と、候補地点そのものを目立つ見た目で表示する。
-  // ホバーのたびに呼ばれる想定なので、まず前回分をクリアしてから描画する。
-  // 鉄道・飛行機等の候補は現在の表示範囲から大きく外れていることが多いため、
-  // 両地点が収まるように地図を軽くパン/ズームする(候補パネルに隠れないよう
-  // 下側に余白を多めに取る)。
-  showCandidatePreview(fromNode, toNode) {
-    this.previewLayer.clearLayers();
-    L.polyline([[fromNode.lat, fromNode.lng], [toNode.lat, toNode.lng]], {
-      color: '#1E90FF', weight: 5, opacity: 0.95, dashArray: '2, 10', lineCap: 'round',
-    }).addTo(this.previewLayer);
-    L.marker([toNode.lat, toNode.lng], {
-      icon: L.divIcon({ className: 'candidate-preview-marker', html: '<div class="candidate-preview-pulse"></div>', iconSize: [34, 34], iconAnchor: [17, 17] }),
-      interactive: false,
-    }).addTo(this.previewLayer);
-
-    const bounds = L.latLngBounds([[fromNode.lat, fromNode.lng], [toNode.lat, toNode.lng]]);
-    const mapSize = this.map.getSize();
-    this.map.flyToBounds(bounds, {
-      paddingTopLeft: [24, 90],
-      paddingBottomRight: [24, Math.round(mapSize.y * 0.42)],
-      maxZoom: 13,
-      duration: 0.35,
-    });
   },
 
   clearCandidatePreview() {
