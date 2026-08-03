@@ -87,11 +87,6 @@ html, body{
   display:flex; gap:6px; overflow-x:auto; padding-bottom:4px;
   scrollbar-width:thin;
 }
-.candidate-category{ margin-bottom:2px; }
-.candidate-category-title{
-  font-size:10px; font-weight:700; color: var(--text-sub); margin:2px 0 3px 2px;
-  display:flex; align-items:center; gap:4px;
-}
 .candidate-card{
   display:flex; flex-direction:column; align-items:center; justify-content:center;
   /* 2026-07-31: 82px幅だと地名が省略されて読めないとの指摘を受けて拡幅した。 */
@@ -141,10 +136,24 @@ html, body{
 .menu-back-btn:active{ background: rgba(255,255,255,0.12); }
 .menu-back-title{ font-size:12px; font-weight:700; color:var(--text-sub); }
 
-/* 「休憩」(アルバイト・食事・休憩・温泉)行と「移動」系カテゴリーの行を
-   アクセント線の色で視覚的に区別する(押し間違い防止のためのユーザー指示)。 */
 .candidate-card--action{ border-left: 3px solid var(--accent-stamina); }
-.candidate-card--move{ border-left: 3px solid var(--accent-indigo); }
+
+/* 「地図で選ぶ」モードの案内文と、地図上の移動候補マーカー・ツールチップ
+   (2026-08-03、ユーザー指示。候補カード一覧の代わりに地図上のマーカーへ
+   カーソルを合わせて詳細を見て、クリックで移動する形式にした)。 */
+.map-move-hint{ font-size:11px; color: var(--text-sub); padding:6px 2px; line-height:1.5; }
+
+.candidate-map-marker{ cursor:pointer; filter: drop-shadow(0 1px 3px rgba(0,0,0,0.6)); transition: transform 0.12s ease; }
+.candidate-map-marker:hover{ transform: scale(1.25); }
+.candidate-map-marker--new::after{
+  content:'✦'; position:absolute; top:-4px; right:-4px; font-size:11px; color: var(--accent-green);
+}
+
+.map-candidate-tooltip{ font-size:11px; line-height:1.5; max-width:200px; }
+.map-candidate-tooltip-name{ font-weight:700; display:flex; align-items:center; gap:3px; }
+.map-candidate-tooltip-name .new-badge{ font-size:8px; background: var(--accent-green); color:#08120d; border-radius:5px; padding:1px 4px; font-weight:700; }
+.map-candidate-tooltip-meta{ color: var(--text-sub); margin-top:2px; }
+.map-candidate-tooltip-preview{ color: var(--text-sub); font-size:10px; margin-top:1px; }
 
 .survival-actions{ display:flex; gap:8px; margin-top:10px; }
 .survival-actions button{

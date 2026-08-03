@@ -172,35 +172,23 @@ function buildOnsenCard() {
   return card;
 }
 
-function buildCandidateCard(c) {
-  const card = document.createElement('button');
-  card.className = 'candidate-card candidate-card--move';
+// 移動候補1件分のツールチップHTML(地図マーカーにホバーした際に表示する内容。
+// 以前の候補カードと同じ情報を出す)。
+function candidateTooltipHtml(c) {
   const preview = candidatePreviewText(c);
-  card.innerHTML = `
-    <div class="candidate-cost">${c.cost > 0 ? `<span class="cost-label">運賃</span>${fmtMoney(c.cost)}` : '無料'}</div>
-    <div class="candidate-icon">${MODE_ICON[c.mode] || '📍'}</div>
-    <div class="candidate-body">
-      <div class="candidate-name">${c.targetName}${c.isNew ? '<span class="new-badge">未発見</span>' : ''}</div>
-      <div class="candidate-meta">${candidateMetaText(c)}</div>
-      ${preview ? `<div class="candidate-preview">${preview}</div>` : ''}
+  const costText = c.cost > 0 ? `運賃 ${fmtMoney(c.cost)}` : '無料';
+  return `
+    <div class="map-candidate-tooltip">
+      <div class="map-candidate-tooltip-name">${MODE_ICON[c.mode] || '📍'} ${c.targetName}${c.isNew ? '<span class="new-badge">未発見</span>' : ''}</div>
+      <div class="map-candidate-tooltip-meta">${costText} ・ ${candidateMetaText(c)}</div>
+      ${preview ? `<div class="map-candidate-tooltip-preview">${preview}</div>` : ''}
     </div>
   `;
-  card.addEventListener('click', () => onChooseCandidate(c));
-
-  // カーソルを合わせている間、現在地→候補地の直線と候補地点を地図上で強調表示する。
-  const targetNode = c.targetType === 'place' ? Game.data.placesById.get(c.targetId) : Game.data.stationsById.get(c.targetId);
-  const currentNode = Game.currentNode();
-  if (targetNode && currentNode) {
-    card.addEventListener('mouseenter', () => MapView.showCandidatePreview(currentNode, targetNode));
-    card.addEventListener('mouseleave', () => MapView.clearCandidatePreview());
-  }
-  return card;
 }
 
-// ④ 候補地をカテゴリー別(移動・歴史・自然・温泉・道の駅・その他)に整理して
-// 表示する(2026-07-31、ユーザー指示。カテゴリーごとの横スクロール帯にする
-// ことで、候補地をたくさん表示できるようにした)。
-const CATEGORY_ICON = { 移動: '🧭', 歴史: '🏯', 自然: '🌲', 温泉: '♨️', 道の駅: '🅿️', その他: '📍' };
+function targetNodeOf(c) {
+  return c.targetType === 'place' ? Game.data.placesById.get(c.targetId) : Game.data.stationsById.get(c.targetId);
+}
 
 // 観光名所に到着したら、その地点のピン(現在地マーカー)に公式ホームページへの
 // リンクをポップアップとして表示する(2026-08-02、ユーザー指示。「ピンを打って
@@ -229,23 +217,13 @@ function showOfficialSitePinIfAny(node) {
   });
 }
 
-// ポケモンの戦闘コマンド(たたかう/バッグ/ポケモン/にげる)のように、
-// まず「移動する/観光する/休憩する」の3択を出し、選んだ先で具体的な候補
-// (技名に相当)を表示する2段階のメニューにする(2026-08-02、ユーザー指示)。
-// activeMenuはUIだけの状態で、Game.stateには含めない(セーブ不要・行動の
-// たびに一覧へ戻したいため)。
-let activeMenu = null; // null(一覧) | 'move' | 'sightsee' | 'rest'
-const SIGHTSEE_CATEGORIES = ['歴史', '自然', '温泉', '道の駅', 'その他'];
-
-function groupCandidatesByCategory(candidates) {
-  const byCategory = new Map();
-  for (const c of candidates) {
-    const cat = c.category || 'その他';
-    if (!byCategory.has(cat)) byCategory.set(cat, []);
-    byCategory.get(cat).push(c);
-  }
-  return byCategory;
-}
+// ポケモンの戦闘コマンドのように、まず「地図で選ぶ/休憩する」の2択を出す
+// (2026-08-03、ユーザー指示で「移動する/観光する」を統合。以前は候補を
+// カテゴリー別のカード一覧で出していたが、地図上に観光地・駅のマーカーを
+// 直接表示してクリックで移動する方式に変更したため、2つに分けておく意味が
+// 無くなった)。activeMenuはUIだけの状態で、Game.stateには含めない
+// (セーブ不要・行動のたびに一覧へ戻したいため)。
+let activeMenu = null; // null(一覧) | 'map' | 'rest'
 
 function buildMainMenuButton(icon, label, count, onClick) {
   const btn = document.createElement('button');
@@ -261,17 +239,14 @@ function buildMainMenuButton(icon, label, count, onClick) {
   return btn;
 }
 
-function renderMainMenu(list, byCategory) {
-  const moveCount = (byCategory.get('移動') || []).length;
-  const sightseeCount = SIGHTSEE_CATEGORIES.reduce((sum, cat) => sum + (byCategory.get(cat) || []).length, 0);
+function renderMainMenu(list, candidates) {
   // 休憩メニューは食事・休憩・温泉のうち1つでも選べれば件数に数える。
   const restCount = [Game.canAffordEat(), Game.canAffordRest(), Game.canAffordOnsen() || Game.atOnsen()]
     .filter(Boolean).length;
 
   const menu = document.createElement('div');
   menu.className = 'main-menu';
-  menu.appendChild(buildMainMenuButton('🧭', '移動する', moveCount, () => { activeMenu = 'move'; renderCandidates(); }));
-  menu.appendChild(buildMainMenuButton('🏯', '観光する', sightseeCount, () => { activeMenu = 'sightsee'; renderCandidates(); }));
+  menu.appendChild(buildMainMenuButton('🗺️', '地図で選ぶ', candidates.length, () => { activeMenu = 'map'; renderCandidates(); }));
   menu.appendChild(buildMainMenuButton('💺', '休憩する', restCount, () => { activeMenu = 'rest'; renderCandidates(); }));
   list.appendChild(menu);
 }
@@ -291,35 +266,27 @@ function renderBackBar(list, title) {
   list.appendChild(bar);
 }
 
-function renderCategoryRows(list, byCategory, categories) {
-  const order = (window.Movement && Movement.CATEGORY_ORDER) || ['移動', '歴史', '自然', '温泉', '道の駅', 'その他'];
-  let any = false;
-  for (const cat of order) {
-    if (!categories.includes(cat)) continue;
-    const items = byCategory.get(cat);
-    if (!items || items.length === 0) continue;
-    any = true;
-    const group = document.createElement('div');
-    group.className = 'candidate-category';
-    const title = document.createElement('div');
-    title.className = 'candidate-category-title';
-    title.textContent = `${CATEGORY_ICON[cat] || '📍'} ${cat}`;
-    group.appendChild(title);
-    const row = document.createElement('div');
-    row.className = 'candidate-row';
-    // ③ 候補はカテゴリー内で距離が近い順に並べる(2026-07-31、ユーザー指示。
-    // どの候補を残すか自体はmovement.js側のスコア選定のままで、表示順だけ変える)。
-    const sorted = [...items].sort((a, b) => a.distanceKm - b.distanceKm);
-    sorted.forEach(c => row.appendChild(buildCandidateCard(c)));
-    group.appendChild(row);
-    list.appendChild(group);
-  }
-  if (!any) {
-    const empty = document.createElement('div');
-    empty.className = 'candidate-meta';
-    empty.textContent = '候補が見つかりません。';
-    list.appendChild(empty);
-  }
+// 「地図で選ぶ」モード: 候補カードの一覧は出さず、地図上のマーカーに
+// カーソルを合わせると詳細(運賃・所要距離等)がツールチップで表示され、
+// クリックするとその場で移動する(2026-08-03、ユーザー指示)。
+function renderMapMoveMenu(list, candidates) {
+  const hint = document.createElement('div');
+  hint.className = 'map-move-hint';
+  hint.textContent = candidates.length > 0
+    ? '地図上のマーカーにカーソルを合わせると詳細が表示されます。クリックで移動します。'
+    : '候補が見つかりません。';
+  list.appendChild(hint);
+
+  const currentNode = Game.currentNode();
+  const items = candidates
+    .map(c => {
+      const node = targetNodeOf(c);
+      if (!node) return null;
+      const emoji = (window.TYPE_ICONS && window.TYPE_ICONS[node.type]) || '📍';
+      return { candidate: c, node, emoji, tooltipHtml: candidateTooltipHtml(c) };
+    })
+    .filter(Boolean);
+  MapView.renderCandidateMarkers(items, currentNode, onChooseCandidate);
 }
 
 function renderRestMenu(list) {
@@ -336,20 +303,16 @@ function renderCandidates() {
   list.innerHTML = '';
   MapView.clearCandidatePreview();
   const candidates = Game.getCandidates();
-  const byCategory = groupCandidatesByCategory(candidates);
+
+  if (activeMenu !== 'map') MapView.clearCandidateMarkers();
 
   if (activeMenu === null) {
-    renderMainMenu(list, byCategory);
+    renderMainMenu(list, candidates);
     return;
   }
-  if (activeMenu === 'move') {
-    renderBackBar(list, '🧭 移動する');
-    renderCategoryRows(list, byCategory, ['移動']);
-    return;
-  }
-  if (activeMenu === 'sightsee') {
-    renderBackBar(list, '🏯 観光する');
-    renderCategoryRows(list, byCategory, SIGHTSEE_CATEGORIES);
+  if (activeMenu === 'map') {
+    renderBackBar(list, '🗺️ 地図で選ぶ');
+    renderMapMoveMenu(list, candidates);
     return;
   }
   if (activeMenu === 'rest') {
@@ -390,6 +353,7 @@ function onOnsen() {
 
 function onChooseCandidate(candidate) {
   MapView.clearCandidatePreview();
+  MapView.clearCandidateMarkers();
   const result = Game.chooseCandidate(candidate);
   toast(result.message);
   renderHud();
@@ -425,6 +389,7 @@ function showGameOver() {
   document.getElementById('gameover-distance').textContent = fmtKm(s.totalDistanceKm);
   document.getElementById('gameover-visited').textContent = s.visitedIds.length;
   MapView.clearCandidatePreview();
+  MapView.clearCandidateMarkers();
   document.getElementById('candidate-panel').classList.add('hidden');
   showOverlay('overlay-gameover');
 }
@@ -451,6 +416,7 @@ function showResult() {
   const lastNode = Game.currentNode();
   if (lastNode) coords.push([lastNode.lat, lastNode.lng]);
   MapView.drawRoute(coords);
+  MapView.clearCandidateMarkers();
 
   document.getElementById('candidate-panel').classList.add('hidden');
   showOverlay('overlay-result');
